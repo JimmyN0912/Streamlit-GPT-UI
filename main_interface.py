@@ -12,6 +12,10 @@ relay_url = 'http://localhost:5000/relay'
 response_url = 'http://localhost:5000/response'
 queue_size_url = 'http://localhost:5000/queue_size'
 status_url = 'http://localhost:5000/status'
+model_info_url = "http://192.168.0.175:5000/v1/internal/model/info"
+model_list_url = "http://192.168.0.175:5000/v1/internal/model/list"
+model_load_url = "http://192.168.0.175:5000/v1/internal/model/load"
+model_unload_url = "http://192.168.0.175:5000/v1/internal/model/unload"
 text_chat_default = [
     {
         'role': 'user',
@@ -33,6 +37,21 @@ if "uploader_key" not in st.session_state:
 if "usage_info" not in st.session_state:
     st.session_state.usage_info = {}
 
+if "max_tokens" not in st.session_state:
+    st.session_state.max_tokens = 512
+
+if "temperature" not in st.session_state:
+    st.session_state.temperature = 0.5
+
+if "model_name" not in st.session_state:
+    st.session_state.model_name = "Meta-Llama-3-8B-Instruct.Q4_K_M.gguf"
+
+if "n_gpu_layers" not in st.session_state:
+    st.session_state.n_gpu_layers = 33
+
+if "n_ctx" not in st.session_state:
+    st.session_state.n_ctx = 65536
+
 # Set page config
 st.set_page_config(page_title="Text Chat Bot", page_icon="🤖", layout="wide", menu_items={"Report a bug": "mailto:ljsh1111031@ljsh.hcc.edu.tw"})
 
@@ -41,45 +60,13 @@ left_column, right_column = st.columns([4, 1])
 
 # Sidebar
 sidebar = st.sidebar
-# Sidebar CSS
-st.markdown("""
-    <style>
-    .sidebar-text {
-        font-family: 'DFKai-SB', sans-serif;
-        font-size: 18px;
-    }
-    .sidebar-title {
-        font-family: 'DFKai-SB', sans-serif;
-        font-size: 22px;
-        font-weight: bold;
-    }
-    .sidebar-subheader {
-        font-family: 'DFKai-SB', sans-serif;
-        font-size: 20px;
-        font-weight: bold;
-    }
-    .sidebar-info {
-        font-family: 'Arial', sans-serif;
-        font-size: 16px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
 # Sidebar - Title
-sidebar.markdown("<div class='sidebar-title'>Text Chat Bot</div>", unsafe_allow_html=True)
-sidebar.markdown("<div class='sidebar-info'>Version: 1.1</div>", unsafe_allow_html=True)
-sidebar.markdown("<div class='sidebar-info'>Developed by: JimmyN0912</div>", unsafe_allow_html=True)
-sidebar.markdown("---")
-# Sidebar - Description
-sidebar.markdown("<div class='sidebar-subheader'>關於本頁面：</div>", unsafe_allow_html=True)
-sidebar.markdown("<div class='sidebar-text'>這是我的一個小技術展示的頁面，你可以用文字與AI對話。要使用此功能，請在下面的輸入框中輸入文字。</div>", unsafe_allow_html=True)
-sidebar.markdown("<div class='sidebar-subheader'>使用注意事項：</div>", unsafe_allow_html=True)
-sidebar.markdown("<div class='sidebar-text'>1. 可用中英文與AI對話，但中文對話效果可能不是太好。</div>", unsafe_allow_html=True)
-sidebar.markdown("<div class='sidebar-text'>2. 請按提交按鈕提交文字，AI將生成回應。</div>", unsafe_allow_html=True)
-sidebar.markdown("<div class='sidebar-text'>3. 請按重製按鈕重置對話，重新開始。</div>", unsafe_allow_html=True)
-sidebar.info("AI生成內容僅供展示，生成內容可能不準確，僅供參考。", icon="🚨")
+sidebar.markdown("# Text Chat Bot")
+sidebar.markdown("## Version: 1.2")
+sidebar.markdown("## Developed by: JimmyN0912")
 sidebar.markdown("---")
 # Sidebar - Export/Import Conversations
-sidebar.markdown("<div class='sidebar-subheader'>對話匯出/匯入：</div>", unsafe_allow_html=True)
+sidebar.markdown("# Conversation Options：")
 def export_conversations():
     export_data = json.dumps(st.session_state.messages)
     return export_data
@@ -108,13 +95,31 @@ if uploaded_file:
     import_conversations(uploaded_file)
     update_key()
     st.rerun()
+
+# Reset button
+with st.sidebar:
+    if st.button("Reset Conversations"):
+        st.session_state.messages = text_chat_default.copy()
+        st.session_state.usage_info = {}
+        st.rerun()
+
+# Sidebar - Text-Gen Stats
+sidebar.markdown("---")
+sidebar.markdown("### Text-Gen Stats")
+sidebar.markdown(f"Prompt Tokens: {st.session_state.usage_info.get('prompt_tokens', 'N/A')}")
+sidebar.markdown(f"Completion Tokens: {st.session_state.usage_info.get('completion_tokens', 'N/A')}")
+sidebar.markdown(f"Total Tokens: {st.session_state.usage_info.get('total_tokens', 'N/A')}")
+sidebar.markdown(f"Elapsed Time: {st.session_state.usage_info.get('elapsed_time', 'N/A')} seconds")
+sidebar.markdown("---")
     
 # Chat Container
 with left_column:
-    # Display chat messages from history on app rerun
-    st.chat_message("assistant").markdown("Hello! How can I help you today?")
-    for message in st.session_state.messages[2:]:
-        st.chat_message(message["role"]).markdown(message["content"])
+    container = st.container(height=950, border=True)
+    with container:
+        # Display chat messages from history on app rerun
+        st.chat_message("assistant").markdown("Hello! How can I help you today?")
+        for message in st.session_state.messages[2:]:
+            st.chat_message(message["role"]).markdown(message["content"])
 
     def check_request_status(request_id):
         response = requests.get(f"{status_url}/{request_id}")
@@ -128,7 +133,9 @@ with left_column:
         message = st.session_state.messages
         data = {
             'text': message,
-            'request_id': request_id
+            'request_id': request_id,
+            'max_tokens': st.session_state.max_tokens,
+            'temperature': st.session_state.temperature
         }
         # Initialize the progress bar
         progress_bar = st.progress(0, "Sending request to the relay server...")
@@ -180,31 +187,60 @@ with left_column:
     input_container = st.empty()
     prompt = input_container.chat_input("Enter your message here...",key=32768)
     if prompt:
-        # Display user message in chat message container
-        st.chat_message("user").markdown(prompt)
-        # Append user message to session state
-        st.session_state.messages.append({'role': 'user', 'content': prompt})
-        input_container.empty()
-        # Get response from the API and display it
-        response = get_text_to_text()
-        if response:
-            st.chat_message("assistant").markdown(response)
-            st.rerun()
+        with container:
+            # Display user message in chat message container
+            st.chat_message("user").markdown(prompt)
+            # Append user message to session state
+            st.session_state.messages.append({'role': 'user', 'content': prompt})
+            input_container.empty()
+            # Get response from the API and display it
+            response = get_text_to_text()
+            if response:
+                st.chat_message("assistant").markdown(response)
+                st.rerun()
 
+def get_model_info():
+    response = requests.get(model_info_url, headers=headers)
+    if response.status_code == 200:
+        model_name = response.json()['model_name']
+        return model_name
+    return {}
+
+def load_model(model_name, load_model_args):
+    payload = {"model_name": model_name, "args": load_model_args}
+    response = requests.post(model_load_url, json=payload, headers=headers)
+    if response.status_code == 200:
+        return "Model loaded successfully"
+    return "Model loading failed"
+    
+def unload_model():
+    response = requests.post(model_unload_url, headers=headers)
+    if response.status_code == 200:
+        return "Model unloaded successfully"
+    return "Model unloading failed"
 
 # Right column
 with right_column:
+    st.markdown("### Settings")
+    st.session_state.temperature = st.slider("Temperature", 0.0, 1.0, 0.5, 0.05)
+    st.session_state.max_tokens = st.number_input("Max Tokens", 1, 1024, 512, 1)
     st.markdown("---")
-    st.markdown("### Text-Gen Stats 生成相關數據：")
-    st.markdown(f"Prompt Tokens: {st.session_state.usage_info.get('prompt_tokens', 'N/A')}")
-    st.markdown(f"Completion Tokens: {st.session_state.usage_info.get('completion_tokens', 'N/A')}")
-    st.markdown(f"Total Tokens: {st.session_state.usage_info.get('total_tokens', 'N/A')}")
-    st.markdown(f"Elapsed Time: {st.session_state.usage_info.get('elapsed_time', 'N/A')} seconds")
-    st.markdown("---")
-
-# Reset button
-with st.sidebar:
-    if st.button("Reset 重置"):
-        st.session_state.messages = text_chat_default.copy()
-        st.session_state.usage_info = {}
+    st.markdown("### Model Info")
+    model_info = get_model_info()
+    st.markdown(f"Model Name:\n\n{model_info}")
+    if st.button("Refresh Model Info"):
         st.rerun()
+    st.markdown("---")
+    st.markdown("### Model Loading")
+    st.session_state.model_name = st.selectbox("Model Name", {"Meta-Llama-3-8B-Instruct.Q4_K_M.gguf", "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", "Mistral-7B-Instruct-v0.2-Quantised.gguf"})
+    st.session_state.n_gpu_layers = st.slider("n-gpu-layers", 0, 33, 33, 1)
+    st.session_state.n_ctx = st.number_input("n_ctx", 1024, 65536, 65536 ,1)
+    if st.button("Load Model"):
+        load_model_args = {"n_gpu_layers": st.session_state.n_gpu_layers, "n_ctx": st.session_state.n_ctx}
+        with st.spinner("Loading model..."):
+            load_status = load_model(st.session_state.model_name, load_model_args)
+            st.toast(load_status, icon="✅")
+    if st.button("Unload Model"):
+        with st.spinner("Unloading model..."):
+            unload_status = unload_model()
+            st.toast(unload_status, icon="✅")

@@ -20,11 +20,13 @@ def process_requests():
 
         request_id = req_data['request_id']
         text = req_data['text']
+        max_tokens = req_data['max_tokens']
+        temperature = req_data['temperature']
         data = {
             "mode": "instruct",
             "messages": text,
-            "max_tokens": 1024,
-            "temperature": 0.5
+            "max_tokens": max_tokens,
+            "temperature": temperature
         }
         try:
             response = requests.post(ttt_url, headers=headers, json=data, timeout=300)
