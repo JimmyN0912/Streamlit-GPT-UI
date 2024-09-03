@@ -70,7 +70,9 @@ def relay():
     req_data = request.get_json()
     text = req_data['text']
     request_id = req_data['request_id']
-    request_queue.put({'text': text, 'request_id': request_id})
+    max_tokens = req_data['max_tokens']
+    temperature = req_data['temperature']
+    request_queue.put({'text': text, 'request_id': request_id, 'max_tokens': max_tokens, 'temperature': temperature})
     queue_position = request_queue.qsize()
     return jsonify({'status': 'queued', 'position': queue_position})
 

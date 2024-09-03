@@ -62,7 +62,7 @@ left_column, right_column = st.columns([4, 1])
 sidebar = st.sidebar
 # Sidebar - Title
 sidebar.markdown("# Text Chat Bot")
-sidebar.markdown("## Version: 1.2")
+sidebar.markdown("## Version: 1.3")
 sidebar.markdown("## Developed by: JimmyN0912")
 sidebar.markdown("---")
 # Sidebar - Export/Import Conversations
@@ -101,6 +101,9 @@ with st.sidebar:
     if st.button("Reset Conversations"):
         st.session_state.messages = text_chat_default.copy()
         st.session_state.usage_info = {}
+        st.rerun()
+    if st.button("Remove previous message"):
+        st.session_state.messages = st.session_state.messages[:-2]
         st.rerun()
 
 # Sidebar - Text-Gen Stats
