@@ -120,7 +120,7 @@ left_column, right_column = st.columns([4, 1])
 sidebar = st.sidebar
 # Sidebar - Title
 sidebar.subheader("Text Chat Bot")
-sidebar.markdown("Version: 1.4")
+sidebar.markdown("Version: 1.4.1")
 sidebar.markdown("Developed by: JimmyN0912")
 sidebar.markdown("---")
 
@@ -369,7 +369,14 @@ with right_column:
         # Import Conversations
         def import_conversations(uploaded_file):
             json_file = json.load(uploaded_file)
-            st.session_state.messages = json_file
+            if st.session_state.chat_mode == "Text Chat":
+                st.session_state.messages = json_file
+            elif st.session_state.chat_mode == "Text Adventure Game":
+                st.session_state.messages_text_adventure_game = json_file
+            elif st.session_state.chat_mode == "Story Writer":
+                st.session_state.messages_story_writer = json_file
+            elif st.session_state.chat_mode == "Code Writer":
+                st.session_state.messages_code_writer = json_file
         def update_key():
             st.session_state.uploader_key += 1    
         uploaded_file = st.file_uploader(
