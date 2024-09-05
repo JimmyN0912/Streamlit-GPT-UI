@@ -120,7 +120,7 @@ left_column, right_column = st.columns([4, 1])
 sidebar = st.sidebar
 # Sidebar - Title
 sidebar.subheader("Text Chat Bot")
-sidebar.markdown("Version: 1.4.1")
+sidebar.markdown("Version: 1.5")
 sidebar.markdown("Developed by: JimmyN0912")
 sidebar.markdown("---")
 
@@ -128,13 +128,15 @@ sidebar.markdown("---")
 sidebar.markdown("### Text-Gen Stats")
 sidebar.markdown(f"Prompt Tokens: {st.session_state.usage_info.get('prompt_tokens', 'N/A')}")
 sidebar.markdown(f"Completion Tokens: {st.session_state.usage_info.get('completion_tokens', 'N/A')}")
+if st.session_state.usage_info.get('completion_tokens', 'N/A') != 'N/A' and st.session_state.usage_info.get('elapsed_time', 'N/A') != 'N/A':
+    sidebar.markdown(f"Generation Speed: {round(st.session_state.usage_info.get('completion_tokens', 'N/A') / st.session_state.usage_info.get('elapsed_time'), 2)} tokens/s")
 sidebar.markdown(f"Total Tokens: {st.session_state.usage_info.get('total_tokens', 'N/A')}")
-sidebar.markdown(f"Elapsed Time: {st.session_state.usage_info.get('elapsed_time', 'N/A')} seconds")
+sidebar.markdown(f"Elapsed Time: {st.session_state.usage_info.get('elapsed_time', 'N/A')} s")
 sidebar.markdown("---")
 
 # Sidebar - Chat Mode Options
 sidebar.markdown("### Chat Modes")
-st.session_state.chat_mode = sidebar.radio("Select Chat Mode", ["Text Chat", "Text Adventure Game", "Story Writer", "Code Writer"])
+st.session_state.chat_mode = sidebar.selectbox("Select Chat Mode", ["Text Chat", "Text Adventure Game", "Story Writer", "Code Writer"])
     
 # Chat Container
 with left_column:
@@ -323,11 +325,15 @@ with right_column:
             load_model_args = {"n_gpu_layers": st.session_state.n_gpu_layers, "n_ctx": st.session_state.n_ctx}
             with st.spinner("Loading model..."):
                 load_status = load_model(st.session_state.model_name, load_model_args)
-                st.toast(load_status, icon="✅")
+            st.toast(load_status, icon="✅")
+            time.sleep(4)
+            st.rerun()
         if st.button("Unload Model"):
             with st.spinner("Unloading model..."):
                 unload_status = unload_model()
-                st.toast(unload_status, icon="✅")
+            st.toast(unload_status, icon="✅")
+            time.sleep(4)
+            st.rerun()
     with st.expander("Conversation Options", expanded=False):
         if st.button("Reset Conversations"):
             if st.session_state.chat_mode == "Text Chat":

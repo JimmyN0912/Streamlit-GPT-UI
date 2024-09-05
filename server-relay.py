@@ -2,6 +2,7 @@ import queue
 import threading
 import requests
 from flask import Flask, request, jsonify
+from waitress import serve
 
 app = Flask(__name__)
 
@@ -19,6 +20,7 @@ def process_requests():
             break  # Exit the thread if None is received
 
         request_id = req_data['request_id']
+        print(f'Processing request {request_id}... Queue size: {request_queue.qsize() + 1}')
         text = req_data['text']
         max_tokens = req_data['max_tokens']
         temperature = req_data['temperature']
@@ -59,6 +61,7 @@ def process_requests():
                 'error': 'Invalid JSON response'
             }
 
+        print(f'Request {request_id} processing complete. Queue size: {request_queue.qsize()}')
         request_queue.task_done()
 
 # Start a worker thread to process the requests
@@ -107,4 +110,4 @@ import atexit
 atexit.register(stop_worker_thread)
 
 if __name__ == '__main__':
-    app.run(port=5000)
+    serve(app, host='0.0.0.0', port=5000)
