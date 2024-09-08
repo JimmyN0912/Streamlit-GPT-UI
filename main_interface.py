@@ -108,6 +108,82 @@ if "messages_story_writer" not in st.session_state:
 if "messages_code_writer" not in st.session_state:
     st.session_state.messages_code_writer = code_writer_default.copy()
 
+# Function to get response from the API via relay server
+def get_text_to_text(mode):
+    request_id = str(uuid.uuid4())
+    if mode == "text_chat":
+        message = st.session_state.messages
+    elif mode == "text_adventure_game":
+        message = st.session_state.messages_text_adventure_game
+    elif mode == "story_writer":
+        message = st.session_state.messages_story_writer
+    elif mode == "code_writer":
+        message = st.session_state.messages_code_writer
+    data = {
+        'text': message,
+        'request_id': request_id,
+        'max_tokens': st.session_state.max_tokens,
+        'temperature': st.session_state.temperature
+    }
+    # Initialize the progress bar
+    progress_bar = st.progress(0, "Sending request to the relay server...")
+    start_time = time.time()
+
+    response = requests.post(relay_url, json=data)
+
+    response_data = response.json()
+    queue_position = response_data['position']
+    
+    # Update the progress bar
+    progress_bar.progress(20, f"Request sent, waiting in queue... (Position: {queue_position})")
+
+    def check_request_status(request_id):
+        response = requests.get(f"{status_url}/{request_id}")
+        if response.status_code == 200:
+            return response.json()['status']
+        return 'unknown'
+    
+    # Poll the relay server for the response
+    while True:
+        status = check_request_status(request_id)
+        if status == 'completed':
+            progress_bar.progress(95, "Response received, processing...")
+            end_time = time.time()
+            response = requests.get(f"{response_url}/{request_id}")
+            response_data = response.json()
+            if 'error' in response_data:
+                st.error(f"Error: {response_data['error']}")
+                return None
+            assistant_message = response_data['assistant_message']
+            st.session_state.usage_info = {
+                'prompt_tokens': response_data['prompt_tokens'],
+                'completion_tokens': response_data['completion_tokens'],
+                'total_tokens': response_data['total_tokens'],
+                'elapsed_time': round(end_time - start_time, 2)
+            }
+            if mode == "text_chat":
+                st.session_state.messages.append({'role': 'assistant', 'content': assistant_message})
+            elif mode == "text_adventure_game":
+                st.session_state.messages_text_adventure_game.append({'role': 'assistant', 'content': assistant_message})
+            elif mode == "story_writer":
+                st.session_state.messages_story_writer.append({'role': 'assistant', 'content': assistant_message})
+            elif mode == "code_writer":
+                st.session_state.messages_code_writer.append({'role': 'assistant', 'content': assistant_message})
+            progress_bar.empty()
+            return assistant_message
+        elif status == 'queued':
+            # Update the progress bar
+            queue_size_response = requests.get(queue_size_url)
+            queue_size = queue_size_response.json()['queue_size']
+            progress_bar.progress(35, f"Waiting in queue... (Position: {queue_position} / Queue Size: {queue_size})")
+            time.sleep(0.5)
+        elif status == 'processing':
+            progress_bar.progress(50, "Request is being processed...")
+            time.sleep(0.5)
+        else:
+            st.error("Error retrieving response")
+            break
+
 # Set page config
 st.set_page_config(page_title="Text Chat Bot", page_icon="🤖", layout="wide", menu_items={"Report a bug": "mailto:ljsh1111031@ljsh.hcc.edu.tw"})
 
@@ -156,6 +232,21 @@ with sidebar.expander("Conversation Options", expanded=False):
             elif st.session_state.chat_mode == "Code Writer":
                 st.session_state.messages_code_writer = st.session_state.messages_code_writer[:-2]
             st.rerun()
+        if st.button("Rerun previous message"):
+            if st.session_state.chat_mode == "Text Chat":
+                st.session_state.messages = st.session_state.messages[:-1]
+                response = get_text_to_text("text_chat")
+            elif st.session_state.chat_mode == "Text Adventure Game":
+                st.session_state.messages_text_adventure_game = st.session_state.messages_text_adventure_game[:-1]
+                response = get_text_to_text("text_adventure_game")
+            elif st.session_state.chat_mode == "Story Writer":
+                st.session_state.messages_story_writer = st.session_state.messages_story_writer[:-1]
+                response = get_text_to_text("story_writer")
+            elif st.session_state.chat_mode == "Code Writer":
+                st.session_state.messages_code_writer = st.session_state.messages_code_writer[:-1]
+                response = get_text_to_text("code_writer")
+            st.rerun()
+                
         # Export Conversations
         def export_conversations():
             if st.session_state.chat_mode == "Text Chat":
@@ -221,82 +312,6 @@ elif st.session_state.chat_mode == "Code Writer":
     for message in st.session_state.messages_code_writer[2:]:
         st.chat_message(message["role"]).markdown(message["content"])
 
-def check_request_status(request_id):
-    response = requests.get(f"{status_url}/{request_id}")
-    if response.status_code == 200:
-        return response.json()['status']
-    return 'unknown'
-
-# Function to get response from the API via relay server
-def get_text_to_text(mode):
-    request_id = str(uuid.uuid4())
-    if mode == "text_chat":
-        message = st.session_state.messages
-    elif mode == "text_adventure_game":
-        message = st.session_state.messages_text_adventure_game
-    elif mode == "story_writer":
-        message = st.session_state.messages_story_writer
-    elif mode == "code_writer":
-        message = st.session_state.messages_code_writer
-    data = {
-        'text': message,
-        'request_id': request_id,
-        'max_tokens': st.session_state.max_tokens,
-        'temperature': st.session_state.temperature
-    }
-    # Initialize the progress bar
-    progress_bar = st.progress(0, "Sending request to the relay server...")
-    start_time = time.time()
-
-    response = requests.post(relay_url, json=data)
-
-    response_data = response.json()
-    queue_position = response_data['position']
-    
-    # Update the progress bar
-    progress_bar.progress(20, f"Request sent, waiting in queue... (Position: {queue_position})")
-    
-    # Poll the relay server for the response
-    while True:
-        status = check_request_status(request_id)
-        if status == 'completed':
-            progress_bar.progress(95, "Response received, processing...")
-            end_time = time.time()
-            response = requests.get(f"{response_url}/{request_id}")
-            response_data = response.json()
-            if 'error' in response_data:
-                st.error(f"Error: {response_data['error']}")
-                return None
-            assistant_message = response_data['assistant_message']
-            st.session_state.usage_info = {
-                'prompt_tokens': response_data['prompt_tokens'],
-                'completion_tokens': response_data['completion_tokens'],
-                'total_tokens': response_data['total_tokens'],
-                'elapsed_time': round(end_time - start_time, 2)
-            }
-            if mode == "text_chat":
-                st.session_state.messages.append({'role': 'assistant', 'content': assistant_message})
-            elif mode == "text_adventure_game":
-                st.session_state.messages_text_adventure_game.append({'role': 'assistant', 'content': assistant_message})
-            elif mode == "story_writer":
-                st.session_state.messages_story_writer.append({'role': 'assistant', 'content': assistant_message})
-            elif mode == "code_writer":
-                st.session_state.messages_code_writer.append({'role': 'assistant', 'content': assistant_message})
-            progress_bar.empty()
-            return assistant_message
-        elif status == 'queued':
-            # Update the progress bar
-            queue_size_response = requests.get(queue_size_url)
-            queue_size = queue_size_response.json()['queue_size']
-            progress_bar.progress(35, f"Waiting in queue... (Position: {queue_position} / Queue Size: {queue_size})")
-            time.sleep(0.5)
-        elif status == 'processing':
-            progress_bar.progress(50, "Request is being processed...")
-            time.sleep(0.5)
-        else:
-            st.error("Error retrieving response")
-            break
-
 # Accept user input
 input_container = st.empty()
 prompt = input_container.chat_input("Enter your message here...",key=32768)
@@ -327,20 +342,17 @@ if prompt:
         input_container.empty()
         # Get response from the API and display it
         response = get_text_to_text("code_writer")
-
-    if response:
-        st.chat_message("assistant").markdown(response)
-        if st.session_state.autosave:
-            if st.session_state.chat_mode == "Text Chat":
-                with open(st.session_state.autosave_path, 'w') as f:
-                    json.dump(st.session_state.messages, f, indent=4)
-            elif st.session_state.chat_mode == "Text Adventure Game":
-                with open(st.session_state.autosave_path, 'w') as f:
-                    json.dump(st.session_state.messages_text_adventure_game, f, indent=4)
-            elif st.session_state.chat_mode == "Story Writer":
-                with open(st.session_state.autosave_path, 'w') as f:
-                    json.dump(st.session_state.messages_story_writer, f, indent=4)
-            elif st.session_state.chat_mode == "Code Writer":
-                with open(st.session_state.autosave_path, 'w') as f:
-                    json.dump(st.session_state.messages_code_writer, f, indent=4)
-        st.rerun()
+    if st.session_state.autosave:
+        if st.session_state.chat_mode == "Text Chat":
+            with open(st.session_state.autosave_path, 'w') as f:
+                json.dump(st.session_state.messages, f, indent=4)
+        elif st.session_state.chat_mode == "Text Adventure Game":
+            with open(st.session_state.autosave_path, 'w') as f:
+                json.dump(st.session_state.messages_text_adventure_game, f, indent=4)
+        elif st.session_state.chat_mode == "Story Writer":
+            with open(st.session_state.autosave_path, 'w') as f:
+                json.dump(st.session_state.messages_story_writer, f, indent=4)
+        elif st.session_state.chat_mode == "Code Writer":
+            with open(st.session_state.autosave_path, 'w') as f:
+                json.dump(st.session_state.messages_code_writer, f, indent=4)
+    st.rerun()
