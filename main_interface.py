@@ -117,6 +117,9 @@ if "messages_story_writer" not in st.session_state:
 if "messages_code_writer" not in st.session_state:
     st.session_state.messages_code_writer = code_writer_default.copy()
 
+if "edit_mode" not in st.session_state:
+    st.session_state.edit_mode = False
+
 # Function to get response from the API via relay server
 def get_text_to_text(mode):
     request_id = str(uuid.uuid4())
@@ -226,13 +229,35 @@ with sidebar.expander("Text-Gen Stats", expanded=True):
     st.markdown(f"Elapsed Time: {st.session_state.usage_info.get('elapsed_time', 'N/A')} s")
 
 with sidebar.expander("Settings", expanded=False):
-        st.session_state.temperature = st.slider("Temperature", 0.0, 1.0, 0.7, 0.05)
-        st.session_state.max_tokens = st.number_input("Max Tokens", 1, 2048, 1024, 1)
-        st.session_state.autosave = st.checkbox("Autosave Conversations", value=False)
-        st.session_state.autosave_path = st.text_input("Autosave Path", value="S:\\chat_histories\\conversations.json")
+        st.session_state.temperature = st.slider(
+            label="Temperature", 
+            help="Lower values generate more confident responses, while higher values generate more diverse and random responses.",
+            min_value=0.0, 
+            max_value=1.0, 
+            value=0.7, 
+            step=0.05)
+        st.session_state.max_tokens = st.number_input(
+            label="Max Tokens",
+            help="The maximum number of tokens to generate in the response.", 
+            min_value=1, 
+            max_value=2048, 
+            value=1024, 
+            step=1)
+        st.session_state.autosave = st.checkbox(
+            label="Autosave Conversations",
+            help="Automatically save the conversation history after each message.", 
+            value=False,
+            disabled=True)
+        st.session_state.autosave_path = st.text_input(
+            label="Autosave Path",
+            help="The file path for autosaving the conversation history.", 
+            value="S:\\chat_histories\\conversations.json",
+            disabled=not st.session_state.autosave)
 
-with sidebar.expander("Conversation Options", expanded=False):
-        if st.button("Reset Conversations"):
+with sidebar.expander("Conversation Options", expanded=True):
+        if st.button(
+            label="Reset Conversations",
+            help="Start a new conversation."):
             if st.session_state.chat_mode == "Text Chat":
                 st.session_state.messages = text_chat_default.copy()
                 st.session_state.usage_info = {}
@@ -246,7 +271,9 @@ with sidebar.expander("Conversation Options", expanded=False):
                 st.session_state.messages_code_writer = code_writer_default.copy()
                 st.session_state.usage_info = {}
             st.rerun()
-        if st.button("Remove previous message"):
+        if st.button(
+            label="Remove previous message",
+            help="Remove the previous user message and assistant response."):
             if st.session_state.chat_mode == "Text Chat":
                 st.session_state.messages = st.session_state.messages[:-2]
             elif st.session_state.chat_mode == "Text Adventure Game":
@@ -256,7 +283,9 @@ with sidebar.expander("Conversation Options", expanded=False):
             elif st.session_state.chat_mode == "Code Writer":
                 st.session_state.messages_code_writer = st.session_state.messages_code_writer[:-2]
             st.rerun()
-        if st.button("Rerun previous message"):
+        if st.button(
+            label="Rerun previous message",
+            help="Resubmit the previous message to get a new response."):
             if st.session_state.chat_mode == "Text Chat":
                 st.session_state.messages = st.session_state.messages[:-1]
                 response = get_text_to_text("text_chat")
@@ -284,6 +313,7 @@ with sidebar.expander("Conversation Options", expanded=False):
             return export_data
         st.download_button(
             label="Export Conversations",
+            help="Export the current conversations to a JSON file.",
             data=export_conversations(),
             file_name="conversations.json",
             mime="application/json"
@@ -301,51 +331,141 @@ with sidebar.expander("Conversation Options", expanded=False):
                 st.session_state.messages_code_writer = json_file
         uploaded_file = st.file_uploader(
             label="Import Conversations",
+            help="Import previous conversations from a JSON file to continue the chat.",
             type="json",
             key=st.session_state.chat_uploader_key)
         if uploaded_file:
             import_conversations(uploaded_file)
             update_key("chat")
             st.rerun()
+        
+        def edit_message():
+            st.session_state.edit_mode = True
+
+        # Edit last message
+        st.button(
+            label="Edit last message",
+            help="Edit the last user message in the conversation history.",
+            on_click=edit_message)
+        
 
 # Sidebar - Chat Mode Options
 sidebar.markdown("### Chat Modes")
-st.session_state.chat_mode = sidebar.selectbox("Select Chat Mode", ["Text Chat", "Text Adventure Game", "Story Writer", "Code Writer"])
+st.session_state.chat_mode = sidebar.selectbox(
+    label="Select Chat Mode",
+    help="Select the chat mode to use. Different chat modes serve different purposes and generate different types of responses.", 
+    options=["Text Chat", "Text Adventure Game", "Story Writer", "Code Writer"])
 sidebar.markdown("---")
 
 # Main Interface
 if st.session_state.chat_mode == "Text Chat":
     # Display chat messages from history on app rerun
     st.chat_message("assistant").markdown("Hello! How can I help you today?")
-    for message in st.session_state.messages[2:]:
-        if message["role"] == "system" and message["type"] == "PDF":
-            st.chat_message("user").expander(message["file_name"], expanded=False).markdown(message["content"])
-        if message["role"] != "system":
-            st.chat_message(message["role"]).markdown(message["content"])
+    total_messages = len(st.session_state.messages)
+    for index, message in enumerate(st.session_state.messages[2:]):
+        if index == total_messages - 4:
+            if st.session_state.edit_mode == True:
+                editor = st.empty()
+                new_message = editor.text_input("Edit last message", value=message["content"])
+                if new_message is not message["content"]:
+                    editor.empty()
+                    st.session_state.messages[-2]["content"] = new_message
+                    del st.session_state.messages[-1]
+                    st.session_state.edit_mode = False
+                    st.chat_message("user").markdown(new_message)
+                    get_text_to_text("text_chat")
+                    st.rerun()
+            else:
+                if message["role"] == "system" and message["type"] == "PDF":
+                    st.chat_message("user").expander(message["file_name"], expanded=False).markdown(message["content"])
+                elif message["role"] != "system":
+                    st.chat_message(message["role"]).markdown(message["content"])
+        else:
+            if message["role"] == "system" and message["type"] == "PDF":
+                st.chat_message("user").expander(message["file_name"], expanded=False).markdown(message["content"])
+            elif message["role"] != "system":
+                st.chat_message(message["role"]).markdown(message["content"])
 elif st.session_state.chat_mode == "Text Adventure Game":
     # Display chat messages from history on app rerun
     st.chat_message("assistant").markdown("Let's start the text adventure game!")
-    for message in st.session_state.messages_text_adventure_game[4:]:
-        if message["role"] == "system" and message["type"] == "PDF":
-            st.chat_message("user").expander(message["file_name"], expanded=False).markdown(message["content"])
-        if message["role"] != "system":
-            st.chat_message(message["role"]).markdown(message["content"])
+    total_messages = len(st.session_state.messages_text_adventure_game)
+    for index, message in enumerate(st.session_state.messages_text_adventure_game[4:]):
+        if index == total_messages - 6:
+            if st.session_state.edit_mode == True:
+                editor = st.empty()
+                new_message = editor.text_input("Edit last message", value=message["content"])
+                if new_message is not message["content"]:
+                    editor.empty()
+                    st.session_state.messages_text_adventure_game[-2]["content"] = new_message
+                    del st.session_state.messages_text_adventure_game[-1]
+                    st.session_state.edit_mode = False
+                    st.chat_message("user").markdown(new_message)
+                    get_text_to_text("text_adventure_game")
+                    st.rerun()
+            else:
+                if message["role"] == "system" and message["type"] == "PDF":
+                    st.chat_message("user").expander(message["file_name"], expanded=False).markdown(message["content"])
+                elif message["role"] != "system":
+                    st.chat_message(message["role"]).markdown(message["content"])
+        else:
+            if message["role"] == "system" and message["type"] == "PDF":
+                st.chat_message("user").expander(message["file_name"], expanded=False).markdown(message["content"])
+            if message["role"] != "system":
+                st.chat_message(message["role"]).markdown(message["content"])
 elif st.session_state.chat_mode == "Story Writer":
     # Display chat messages from history on app rerun
     st.chat_message("assistant").markdown("Let's start writing a story!")
-    for message in st.session_state.messages_story_writer[2:]:
-        if message["role"] == "system" and message["type"] == "PDF":
-            st.chat_message("user").expander(message["file_name"], expanded=False).markdown(message["content"])
-        if message["role"] != "system":
-            st.chat_message(message["role"]).markdown(message["content"])
+    total_messages = len(st.session_state.messages_story_writer)
+    for index, message in enumerate(st.session_state.messages_story_writer[2:]):
+        if index == total_messages - 4:
+            if st.session_state.edit_mode == True:
+                editor = st.empty()
+                new_message = editor.text_input("Edit last message", value=message["content"])
+                if new_message is not message["content"]:
+                    editor.empty()
+                    st.session_state.messages_story_writer[-2]["content"] = new_message
+                    del st.session_state.messages_story_writer[-1]
+                    st.session_state.edit_mode = False
+                    st.chat_message("user").markdown(new_message)
+                    get_text_to_text("story_writer")
+                    st.rerun()
+            else:
+                if message["role"] == "system" and message["type"] == "PDF":
+                    st.chat_message("user").expander(message["file_name"], expanded=False).markdown(message["content"])
+                elif message["role"] != "system":
+                    st.chat_message(message["role"]).markdown(message["content"])
+        else:
+            if message["role"] == "system" and message["type"] == "PDF":
+                st.chat_message("user").expander(message["file_name"], expanded=False).markdown(message["content"])
+            if message["role"] != "system":
+                st.chat_message(message["role"]).markdown(message["content"])
 elif st.session_state.chat_mode == "Code Writer":
     # Display chat messages from history on app rerun
     st.chat_message("assistant").markdown("What code would you like me to write?")
-    for message in st.session_state.messages_code_writer[2:]:
-        if message["role"] == "system" and message["type"] == "PDF":
-            st.chat_message("user").expander(message["file_name"], expanded=False).markdown(message["content"])
-        if message["role"] != "system":
-            st.chat_message(message["role"]).markdown(message["content"])
+    total_messages = len(st.session_state.messages_code_writer)
+    for index, message in enumerate(st.session_state.messages_code_writer[2:]):
+        if index == total_messages - 4:
+            if st.session_state.edit_mode == True:
+                editor = st.empty()
+                new_message = editor.text_input("Edit last message", value=message["content"])
+                if new_message is not message["content"]:
+                    editor.empty()
+                    st.session_state.messages_code_writer[-2]["content"] = new_message
+                    del st.session_state.messages_code_writer[-1]
+                    st.session_state.edit_mode = False
+                    st.chat_message("user").markdown(new_message)
+                    get_text_to_text("code_writer")
+                    st.rerun()
+            else:
+                if message["role"] == "system" and message["type"] == "PDF":
+                    st.chat_message("user").expander(message["file_name"], expanded=False).markdown(message["content"])
+                elif message["role"] != "system":
+                    st.chat_message(message["role"]).markdown(message["content"])
+        else:
+            if message["role"] == "system" and message["type"] == "PDF":
+                st.chat_message("user").expander(message["file_name"], expanded=False).markdown(message["content"])
+            if message["role"] != "system":
+                st.chat_message(message["role"]).markdown(message["content"])
 
 # Accept user input
 input_container = st.empty()
@@ -399,6 +519,7 @@ if prompt:
 
 upload_pdf = sidebar.file_uploader(
     label = "Upload a PDF file", 
+    help="Upload a PDF file to the chat. Only text content will be extracted from the PDF file.",
     type=["pdf"],
     accept_multiple_files=False,
     key=st.session_state.pdf_uploader_key)
