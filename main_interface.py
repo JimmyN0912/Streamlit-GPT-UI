@@ -3,23 +3,19 @@ import requests
 import time
 import uuid
 import json
-import base64
+import PyPDF2
+import datetime
 
 # Variables
 headers = {"Content-Type": "application/json"}
-ttt_url = "http://192.168.0.175:5000/v1/chat/completions"
 relay_url = 'http://localhost:5000/relay'
 response_url = 'http://localhost:5000/response'
 queue_size_url = 'http://localhost:5000/queue_size'
 status_url = 'http://localhost:5000/status'
-model_info_url = "http://192.168.0.175:5000/v1/internal/model/info"
-model_list_url = "http://192.168.0.175:5000/v1/internal/model/list"
-model_load_url = "http://192.168.0.175:5000/v1/internal/model/load"
-model_unload_url = "http://192.168.0.175:5000/v1/internal/model/unload"
 text_chat_default = [
     {
-        'role': 'user',
-        'content': "You are a text chat assistant who will generate responses based on the user's messages. You can engage in all kinds of conversations with the user. You can also provide information, answer questions, and more. You will respond in English or Chinese.",
+        'role': 'system',
+        'content': "You are a text chat assistant who will generate responses based on the user's messages. You can engage in all kinds of conversations with the user. You can also provide information, answer questions, and more.",
     },
     {
         'role': 'assistant',
@@ -69,8 +65,11 @@ code_writer_default = [
 if "messages" not in st.session_state:
     st.session_state.messages = text_chat_default.copy()
 
-if "uploader_key" not in st.session_state:
-    st.session_state.uploader_key = 0
+if "chat_uploader_key" not in st.session_state:
+    st.session_state.chat_uploader_key = 0
+
+if "pdf_uploader_key" not in st.session_state:
+    st.session_state.pdf_uploader_key = 131072
 
 if "usage_info" not in st.session_state:
     st.session_state.usage_info = {}
@@ -184,6 +183,21 @@ def get_text_to_text(mode):
             st.error("Error retrieving response")
             break
 
+def update_key(module):
+    if module == "chat":
+        st.session_state.chat_uploader_key += 1
+    if module == "pdf":
+        st.session_state.pdf_uploader_key += 1
+
+# Function to convert PDF to text using PyPDF2
+def pdf_to_text(pdf_file):
+    reader = PyPDF2.PdfReader(pdf_file)
+    text = ""
+    for page_num in range(len(reader.pages)):
+        page = reader.pages[page_num]
+        text += page.extract_text()
+    return text
+
 # Set page config
 st.set_page_config(page_title="Text Chat Bot", page_icon="🤖", layout="wide", menu_items={"Report a bug": "mailto:ljsh1111031@ljsh.hcc.edu.tw"})
 
@@ -202,8 +216,8 @@ with sidebar.expander("Text-Gen Stats", expanded=True):
     st.markdown(f"Elapsed Time: {st.session_state.usage_info.get('elapsed_time', 'N/A')} s")
 
 with sidebar.expander("Settings", expanded=False):
-        st.session_state.temperature = st.slider("Temperature", 0.0, 1.0, 0.5, 0.05)
-        st.session_state.max_tokens = st.number_input("Max Tokens", 1, 1024, 512, 1)
+        st.session_state.temperature = st.slider("Temperature", 0.0, 1.0, 0.7, 0.05)
+        st.session_state.max_tokens = st.number_input("Max Tokens", 1, 2048, 1024, 1)
         st.session_state.autosave = st.checkbox("Autosave Conversations", value=False)
         st.session_state.autosave_path = st.text_input("Autosave Path", value="S:\\chat_histories\\conversations.json")
 
@@ -275,42 +289,45 @@ with sidebar.expander("Conversation Options", expanded=False):
                 st.session_state.messages_story_writer = json_file
             elif st.session_state.chat_mode == "Code Writer":
                 st.session_state.messages_code_writer = json_file
-        def update_key():
-            st.session_state.uploader_key += 1    
         uploaded_file = st.file_uploader(
             label="Import Conversations",
             type="json",
-            key=st.session_state.uploader_key)
+            key=st.session_state.chat_uploader_key)
         if uploaded_file:
             import_conversations(uploaded_file)
-            update_key()
+            update_key("chat")
             st.rerun()
 
 # Sidebar - Chat Mode Options
 sidebar.markdown("### Chat Modes")
 st.session_state.chat_mode = sidebar.selectbox("Select Chat Mode", ["Text Chat", "Text Adventure Game", "Story Writer", "Code Writer"])
+sidebar.markdown("---")
 
 # Main Interface
 if st.session_state.chat_mode == "Text Chat":
     # Display chat messages from history on app rerun
     st.chat_message("assistant").markdown("Hello! How can I help you today?")
     for message in st.session_state.messages[2:]:
-        st.chat_message(message["role"]).markdown(message["content"])
+        if message["role"] != "system":
+            st.chat_message(message["role"]).markdown(message["content"])
 elif st.session_state.chat_mode == "Text Adventure Game":
     # Display chat messages from history on app rerun
     st.chat_message("assistant").markdown("Let's start the text adventure game!")
     for message in st.session_state.messages_text_adventure_game[4:]:
-        st.chat_message(message["role"]).markdown(message["content"])
+        if message["role"] != "system":
+            st.chat_message(message["role"]).markdown(message["content"])
 elif st.session_state.chat_mode == "Story Writer":
     # Display chat messages from history on app rerun
     st.chat_message("assistant").markdown("Let's start writing a story!")
     for message in st.session_state.messages_story_writer[2:]:
-        st.chat_message(message["role"]).markdown(message["content"])
+        if message["role"] != "system":
+            st.chat_message(message["role"]).markdown(message["content"])
 elif st.session_state.chat_mode == "Code Writer":
     # Display chat messages from history on app rerun
     st.chat_message("assistant").markdown("What code would you like me to write?")
     for message in st.session_state.messages_code_writer[2:]:
-        st.chat_message(message["role"]).markdown(message["content"])
+        if message["role"] != "system":
+            st.chat_message(message["role"]).markdown(message["content"])
 
 # Accept user input
 input_container = st.empty()
@@ -318,26 +335,31 @@ prompt = input_container.chat_input("Enter your message here...",key=32768)
 if prompt:
     # Display user message in chat message container
     st.chat_message("user").markdown(prompt)
+    current_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     if st.session_state.chat_mode == "Text Chat":
         # Append user message to session state
+        st.session_state.messages.append({'role': 'system', 'content': "Current Date and Time: " + current_date})
         st.session_state.messages.append({'role': 'user', 'content': prompt})
         input_container.empty()
         # Get response from the API and display it
         response = get_text_to_text("text_chat")
     elif st.session_state.chat_mode == "Text Adventure Game":
         # Append user message to session state
+        st.session_state.messages_text_adventure_game.append({'role': 'system', 'content': "Current Date and Time: " + current_date})
         st.session_state.messages_text_adventure_game.append({'role': 'user', 'content': prompt})
         input_container.empty()
         # Get response from the API and display it
         response = get_text_to_text("text_adventure_game")
     elif st.session_state.chat_mode == "Story Writer":
         # Append user message to session state
+        st.session_state.messages_story_writer.append({'role': 'system', 'content': "Current Date and Time: " + current_date})
         st.session_state.messages_story_writer.append({'role': 'user', 'content': prompt})
         input_container.empty()
         # Get response from the API and display it
         response = get_text_to_text("story_writer")
     elif st.session_state.chat_mode == "Code Writer":
         # Append user message to session state
+        st.session_state.messages_code_writer.append({'role': 'system', 'content': "Current Date and Time: " + current_date})
         st.session_state.messages_code_writer.append({'role': 'user', 'content': prompt})
         input_container.empty()
         # Get response from the API and display it
@@ -355,4 +377,22 @@ if prompt:
         elif st.session_state.chat_mode == "Code Writer":
             with open(st.session_state.autosave_path, 'w') as f:
                 json.dump(st.session_state.messages_code_writer, f, indent=4)
+    st.rerun()
+
+upload_pdf = sidebar.file_uploader(
+    label = "Upload a PDF file", 
+    type=["pdf"],
+    accept_multiple_files=False,
+    key=st.session_state.pdf_uploader_key)
+if upload_pdf:
+    text = pdf_to_text(upload_pdf)
+    if st.session_state.chat_mode == "Text Chat":
+        st.session_state.messages.append({'role': 'user', 'content': f"PDF File:{text}"})
+    elif st.session_state.chat_mode == "Text Adventure Game":
+        st.session_state.messages_text_adventure_game.append({'role': 'user', 'content': f"PDF File:{text}"})
+    elif st.session_state.chat_mode == "Story Writer":
+        st.session_state.messages_story_writer.append({'role': 'user', 'content': f"PDF File:{text}"})
+    elif st.session_state.chat_mode == "Code Writer":
+        st.session_state.messages_code_writer.append({'role': 'user', 'content': f"PDF File:{text}"})
+    update_key("pdf")
     st.rerun()
