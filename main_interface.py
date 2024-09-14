@@ -15,48 +15,58 @@ status_url = 'http://localhost:5000/status'
 text_chat_default = [
     {
         'role': 'system',
+        'type': 'message',
         'content': "You are a text chat assistant who will generate responses based on the user's messages. You can engage in all kinds of conversations with the user. You can also provide information, answer questions, and more.",
     },
     {
         'role': 'assistant',
+        'type': 'message',
         'content': "Hello! How can I help you today?",
     }
 ]
 text_adventure_game_default = [
             {
                 "role": "user",
+                'type': 'message',
                 "content": "You are a text adventure game guide who will play a text adventure game with the user. You will guide the user through the game, and the user will say what they want to do in the game. You will then respond to the user's actions and provide action options to continue the game. When the user says 'Let's go!, or something similar, you will start the game. If the user want to play a game they provide, you will start the game based on the user's request. You will only generate text that is related to the game, and you will not generate actions for the user. You will use any language the user initially uses. The following is an example."
             },
             {
                 "role": "assistant",
+                'type': 'message',
                 "content": "Ok."
             },
             {
                 "role": "user",
+                'type': 'message',
                 "content": "Example:{A description of the surroundings and the environment, please be creative! Prompt thee user with action options:\n- Option 1\n- Option 2\n- Option 3}"
             },
             {
                 "role": "assistant",
+                'type': 'message',
                 "content": "Let's start the text adventure game!"
             }
         ]
 story_writer_default = [
             {
                 "role": "user",
+                'type': 'message',
                 "content": "You are a story writer who will write a story based on the user's prompt. You will write a story based on the user's prompt, and the user will provide the prompt for the story. You will then write the story based on the user's prompt and provide the story to the user. You will only generate text that is related to the story, and you will not generate actions for the user. You will use any language the user initially uses. Character names can be freely decided by the user, even user ids."                
             },
             {
                 "role": "assistant",
+                'type': 'message',
                 "content": "Let's start writing a story!"
             }
         ]
 code_writer_default = [
             {
                 "role": "user",
+                'type': 'message',
                 "content": "You are a code writer who will write code based on the user's prompt. You will write code based on the user's prompt, and the user will provide the prompt for the code. You will then write the code based on the user's prompt and provide the code to the user. You will only generate text that is related to the code. You will use any language the user initially uses."                
             },
             {
                 "role": "assistant",
+                'type': 'message',
                 "content": "What code would you like me to write?"
             }
         ]
@@ -119,7 +129,7 @@ def get_text_to_text(mode):
     elif mode == "code_writer":
         message = st.session_state.messages_code_writer
     data = {
-        'text': message,
+        'text': [{'role': msg['role'], 'content': msg['content']} for msg in message],
         'request_id': request_id,
         'max_tokens': st.session_state.max_tokens,
         'temperature': st.session_state.temperature
@@ -161,13 +171,13 @@ def get_text_to_text(mode):
                 'elapsed_time': round(end_time - start_time, 2)
             }
             if mode == "text_chat":
-                st.session_state.messages.append({'role': 'assistant', 'content': assistant_message})
+                st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': assistant_message})
             elif mode == "text_adventure_game":
-                st.session_state.messages_text_adventure_game.append({'role': 'assistant', 'content': assistant_message})
+                st.session_state.messages_text_adventure_game.append({'role': 'assistant', 'type': 'message', 'content': assistant_message})
             elif mode == "story_writer":
-                st.session_state.messages_story_writer.append({'role': 'assistant', 'content': assistant_message})
+                st.session_state.messages_story_writer.append({'role': 'assistant', 'type': 'message', 'content': assistant_message})
             elif mode == "code_writer":
-                st.session_state.messages_code_writer.append({'role': 'assistant', 'content': assistant_message})
+                st.session_state.messages_code_writer.append({'role': 'assistant', 'type': 'message', 'content': assistant_message})
             progress_bar.empty()
             return assistant_message
         elif status == 'queued':
@@ -308,24 +318,32 @@ if st.session_state.chat_mode == "Text Chat":
     # Display chat messages from history on app rerun
     st.chat_message("assistant").markdown("Hello! How can I help you today?")
     for message in st.session_state.messages[2:]:
+        if message["role"] == "system" and message["type"] == "PDF":
+            st.chat_message("user").expander(message["file_name"], expanded=False).markdown(message["content"])
         if message["role"] != "system":
             st.chat_message(message["role"]).markdown(message["content"])
 elif st.session_state.chat_mode == "Text Adventure Game":
     # Display chat messages from history on app rerun
     st.chat_message("assistant").markdown("Let's start the text adventure game!")
     for message in st.session_state.messages_text_adventure_game[4:]:
+        if message["role"] == "system" and message["type"] == "PDF":
+            st.chat_message("user").expander(message["file_name"], expanded=False).markdown(message["content"])
         if message["role"] != "system":
             st.chat_message(message["role"]).markdown(message["content"])
 elif st.session_state.chat_mode == "Story Writer":
     # Display chat messages from history on app rerun
     st.chat_message("assistant").markdown("Let's start writing a story!")
     for message in st.session_state.messages_story_writer[2:]:
+        if message["role"] == "system" and message["type"] == "PDF":
+            st.chat_message("user").expander(message["file_name"], expanded=False).markdown(message["content"])
         if message["role"] != "system":
             st.chat_message(message["role"]).markdown(message["content"])
 elif st.session_state.chat_mode == "Code Writer":
     # Display chat messages from history on app rerun
     st.chat_message("assistant").markdown("What code would you like me to write?")
     for message in st.session_state.messages_code_writer[2:]:
+        if message["role"] == "system" and message["type"] == "PDF":
+            st.chat_message("user").expander(message["file_name"], expanded=False).markdown(message["content"])
         if message["role"] != "system":
             st.chat_message(message["role"]).markdown(message["content"])
 
@@ -338,29 +356,29 @@ if prompt:
     current_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     if st.session_state.chat_mode == "Text Chat":
         # Append user message to session state
-        st.session_state.messages.append({'role': 'system', 'content': "Current Date and Time: " + current_date})
-        st.session_state.messages.append({'role': 'user', 'content': prompt})
+        st.session_state.messages.append({'role': 'system', 'type': 'message', 'content': "Current Date and Time: " + current_date})
+        st.session_state.messages.append({'role': 'user', 'type': 'message', 'content': prompt})
         input_container.empty()
         # Get response from the API and display it
         response = get_text_to_text("text_chat")
     elif st.session_state.chat_mode == "Text Adventure Game":
         # Append user message to session state
-        st.session_state.messages_text_adventure_game.append({'role': 'system', 'content': "Current Date and Time: " + current_date})
-        st.session_state.messages_text_adventure_game.append({'role': 'user', 'content': prompt})
+        st.session_state.messages_text_adventure_game.append({'role': 'system', 'type': 'message', 'content': "Current Date and Time: " + current_date})
+        st.session_state.messages_text_adventure_game.append({'role': 'user', 'type': 'message', 'content': prompt})
         input_container.empty()
         # Get response from the API and display it
         response = get_text_to_text("text_adventure_game")
     elif st.session_state.chat_mode == "Story Writer":
         # Append user message to session state
-        st.session_state.messages_story_writer.append({'role': 'system', 'content': "Current Date and Time: " + current_date})
-        st.session_state.messages_story_writer.append({'role': 'user', 'content': prompt})
+        st.session_state.messages_story_writer.append({'role': 'system', 'type': 'message', 'content': "Current Date and Time: " + current_date})
+        st.session_state.messages_story_writer.append({'role': 'user', 'type': 'message', 'content': prompt})
         input_container.empty()
         # Get response from the API and display it
         response = get_text_to_text("story_writer")
     elif st.session_state.chat_mode == "Code Writer":
         # Append user message to session state
-        st.session_state.messages_code_writer.append({'role': 'system', 'content': "Current Date and Time: " + current_date})
-        st.session_state.messages_code_writer.append({'role': 'user', 'content': prompt})
+        st.session_state.messages_code_writer.append({'role': 'system', 'type': 'message', 'content': "Current Date and Time: " + current_date})
+        st.session_state.messages_code_writer.append({'role': 'user', 'type': 'message', 'content': prompt})
         input_container.empty()
         # Get response from the API and display it
         response = get_text_to_text("code_writer")
@@ -387,12 +405,12 @@ upload_pdf = sidebar.file_uploader(
 if upload_pdf:
     text = pdf_to_text(upload_pdf)
     if st.session_state.chat_mode == "Text Chat":
-        st.session_state.messages.append({'role': 'user', 'content': f"PDF File:{text}"})
+        st.session_state.messages.append({'role': 'system', 'type': 'PDF', 'file_name': upload_pdf.name, 'content': f"PDF File Content:\n\n{text}"})
     elif st.session_state.chat_mode == "Text Adventure Game":
-        st.session_state.messages_text_adventure_game.append({'role': 'user', 'content': f"PDF File:{text}"})
+        st.session_state.messages.append({'role': 'system', 'type': 'PDF', 'file_name': upload_pdf.name, 'content': f"PDF File Content:\n\n{text}"})
     elif st.session_state.chat_mode == "Story Writer":
-        st.session_state.messages_story_writer.append({'role': 'user', 'content': f"PDF File:{text}"})
+        st.session_state.messages.append({'role': 'system', 'type': 'PDF', 'file_name': upload_pdf.name, 'content': f"PDF File Content:\n\n{text}"})
     elif st.session_state.chat_mode == "Code Writer":
-        st.session_state.messages_code_writer.append({'role': 'user', 'content': f"PDF File:{text}"})
+        st.session_state.messages.append({'role': 'system', 'type': 'PDF', 'file_name': upload_pdf.name, 'content': f"PDF File Content:\n\n{text}"})
     update_key("pdf")
     st.rerun()
