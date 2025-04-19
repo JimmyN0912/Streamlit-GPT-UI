@@ -1,0 +1,69 @@
+import streamlit as st
+import cohere
+from os import getenv
+from dotenv import load_dotenv
+import time
+
+
+# Load environment variables
+load_dotenv()
+
+ACCOUNT_ID = getenv("CLOUDFLARE_ACCOUNT_ID")
+GATEWAY_ID = getenv("CLOUDLFARE_AI_GATEWAY_GATEWAY_ID")
+base_url=f"https://gateway.ai.cloudflare.com/v1/{ACCOUNT_ID}/{GATEWAY_ID}/cohere"
+
+co = cohere.ClientV2(
+    api_key=getenv("COHERE_API_KEY"),
+    base_url=base_url
+)
+
+
+# Available Cohere models
+models = {
+    "Command A": "command-a-03-2025",
+    "Command R 7B": "command-r7b-12-2024",
+    "Command R+": "command-r-plus",
+    "Command R": "command-r",
+    "Command": "command",
+    "Command Nightly": "command-nightly",
+    "Command Light": "command-light",
+    "Command Light Nightly": "command-light-nightly"
+}
+
+def get_response(message, mode, progress_bar):
+    """Get response from Cohere API"""
+    messages = [{"role": msg['role'], "content": msg['content']} for msg in message]
+    progress_bar.progress(20, "Sending request to Cohere...")
+
+    
+    response = co.chat(
+        model=models[st.session_state.cohere_model],
+        messages=messages,
+        max_tokens=st.session_state.max_tokens,
+        temperature=st.session_state.temperature
+    )
+    
+    progress_bar.progress(90, "Response received, processing...")
+    
+    assistant_message = response.message.content[0].text
+    model_name = f"Cohere {st.session_state.cohere_model}"
+    st.session_state.usage_info = {
+            'prompt_tokens': response.usage.tokens.input_tokens,
+            'completion_tokens': response.usage.tokens.output_tokens,
+            'total_tokens': response.usage.tokens.input_tokens + response.usage.tokens.output_tokens,
+            'elapsed_time': ''
+        }
+    
+    # Add the response to the appropriate message list
+    if mode == "text_chat":
+        st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': model_name})
+    elif mode == "text_adventure_game":
+        st.session_state.messages_text_adventure_game.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': model_name})
+    elif mode == "story_writer":
+        st.session_state.messages_story_writer.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': model_name})
+    elif mode == "code_writer":
+        st.session_state.messages_code_writer.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': model_name})
+    progress_bar.progress(100, "Response processed successfully.")
+    time.sleep(1)
+    progress_bar.empty()
+    return assistant_message

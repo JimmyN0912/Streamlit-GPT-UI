@@ -10,7 +10,7 @@ app = Flask(__name__)
 request_queue = queue.Queue()
 responses = {}
 headers = {"Content-Type": "application/json"}
-ttt_url = "https://192.168.0.175:5000/v1/chat/completions"
+ttt_url = "http://127.0.0.1:8080/v1/chat/completions"
 
 # Function to process requests from the queue
 def process_requests():

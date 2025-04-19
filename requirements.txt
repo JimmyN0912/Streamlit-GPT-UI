@@ -2,3 +2,6 @@ streamlit
 PyPDF2
 flask
 waitress
+google-genai
+cohere
+dotenv
