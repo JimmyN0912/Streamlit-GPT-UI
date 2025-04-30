@@ -7,13 +7,13 @@ import time
 # Load environment variables
 load_dotenv()
 
-# Set up the API URL for Cloudflare Workers AI
+# Set up the API URL for Groq Cloud API via Cloudflare AI Getaway
 API_KEY = getenv("GROQ_API_KEY")
 ACCOUNT_ID = getenv("CLOUDFLARE_ACCOUNT_ID")
 GATEWAY_ID = getenv("CLOUDLFARE_AI_GATEWAY_GATEWAY_ID")
 base_url = f"https://gateway.ai.cloudflare.com/v1/{ACCOUNT_ID}/{GATEWAY_ID}/groq/chat/completions"
 
-# Available Cloudflare models
+# Available Groq models
 models = {
     "Llama 4 Maverick 17B 128E Instruct": "meta-llama/llama-4-maverick-17b-128e-instruct",
     "Llama 4 Scout 17B 16E Instruct": "meta-llama/llama-4-scout-17b-16e-instruct",
@@ -49,7 +49,7 @@ def get_response(message, mode, progress_bar):
     if response.status_code == 200:
         response_data = response.json()
         assistant_message = response_data['choices'][0]['message']['content']
-        model_name = f"Groq {st.session_state.cloudflare_model}"
+        model_name = f"Groq {st.session_state.groq_model}"
         st.session_state.usage_info = {
             'prompt_tokens': response_data['usage']['prompt_tokens'],
             'completion_tokens': response_data['usage']['completion_tokens'],

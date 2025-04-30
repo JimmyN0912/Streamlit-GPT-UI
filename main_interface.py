@@ -1,9 +1,10 @@
 import streamlit as st
 import json
 import datetime
+import os
 
 # Import our modules
-from utils.constants import (TEXT_CHAT_DEFAULT, TEXT_ADVENTURE_GAME_DEFAULT, STORY_WRITER_DEFAULT, CODE_WRITER_DEFAULT)
+from utils.constants import (TEXT_CHAT_DEFAULT)
 from utils.pdf_utils import pdf_to_text
 from utils.chat_utils import update_key, get_text_to_text, export_conversations, import_conversations
 from api import gemini, cloudflare, cohere, openrouter, groq
@@ -11,6 +12,9 @@ from api import gemini, cloudflare, cohere, openrouter, groq
 # Initialize session state variables
 if "messages" not in st.session_state:
     st.session_state.messages = TEXT_CHAT_DEFAULT.copy()
+
+if "system_prompt" not in st.session_state:
+    st.session_state.system_prompt = ""
 
 if "chat_uploader_key" not in st.session_state:
     st.session_state.chat_uploader_key = 0
@@ -30,20 +34,15 @@ if "temperature" not in st.session_state:
 if "autosave" not in st.session_state:
     st.session_state.autosave = False
 
+if "enable_streaming" not in st.session_state:
+    st.session_state.enable_streaming = True
+
+if "docker_mode" not in st.session_state:
+    st.session_state.docker_mode = os.environ.get("IN_DOCKER") == "true"
+
 if "autosave_path" not in st.session_state:
+    # Default path that works well on Windows
     st.session_state.autosave_path = "F:\\chats\\conversations.json"
-
-if "chat_mode" not in st.session_state:
-    st.session_state.chat_mode = "Text Chat"
-
-if "messages_text_adventure_game" not in st.session_state:
-    st.session_state.messages_text_adventure_game = TEXT_ADVENTURE_GAME_DEFAULT.copy()
-
-if "messages_story_writer" not in st.session_state:
-    st.session_state.messages_story_writer = STORY_WRITER_DEFAULT.copy()
-
-if "messages_code_writer" not in st.session_state:
-    st.session_state.messages_code_writer = CODE_WRITER_DEFAULT.copy()
 
 if "edit_mode" not in st.session_state:
     st.session_state.edit_mode = False
@@ -92,6 +91,30 @@ with sidebar:
         help="Select the AI model provider to use for generating responses.",
         options=["Local Model", "Google Gemini", "Cloudflare Workers AI", "Cohere", "OpenRouter", "Groq"],
     )
+    
+    # Add system prompt input
+    system_prompt = st.text_area(
+        label="System Prompt",
+        help="Set a system prompt that will be included at the beginning of each conversation. Leave empty for no system prompt.",
+        value=st.session_state.system_prompt,
+        placeholder="Example: You are a helpful assistant who specializes in programming...",
+        height=100
+    )
+    # Update session state if the prompt has changed
+    if system_prompt != st.session_state.system_prompt:
+        st.session_state.system_prompt = system_prompt
+    
+    # Add streaming toggle (only for Local Model)
+    if st.session_state.model_provider == "Local Model":
+        st.session_state.enable_streaming = st.toggle(
+            label="Enable Streaming",
+            help="Enable streaming responses that appear word by word instead of all at once.",
+            value=st.session_state.enable_streaming
+        )
+    else:
+        # Reset streaming to false when not using Local Model
+        st.session_state.enable_streaming = False
+    
     if st.session_state.model_provider == "Google Gemini":
         st.session_state.gemini_model = st.selectbox(
             label="Gemini Model",
@@ -126,11 +149,24 @@ with sidebar:
         label="Autosave Conversations",
         help="Automatically save the conversation history after each message.", 
         value=False)
-    st.session_state.autosave_path = st.text_input(
-        label="Autosave Path",
-        help="The file path for autosaving the conversation history.", 
-        value=st.session_state.autosave_path,
-        disabled=not st.session_state.autosave)
+    
+    # Different autosave UI based on Docker or local mode
+    if st.session_state.docker_mode:
+        st.info("Running in Docker mode. History will be saved in the container and available for download.")
+        if st.session_state.autosave:
+            st.download_button(
+                label="📥 Download Current Autosave",
+                help="Download the current autosaved conversation to your local machine",
+                data=export_conversations(),
+                file_name="conversations.json",
+                mime="application/json"
+            )
+    else:
+        st.session_state.autosave_path = st.text_input(
+            label="Autosave Path",
+            help="The file path for autosaving the conversation history.", 
+            value=st.session_state.autosave_path,
+            disabled=not st.session_state.autosave)
     
     st.sidebar.markdown("## Generation Parameters")
     st.session_state.temperature = st.slider(
@@ -152,14 +188,7 @@ with sidebar:
         if st.button(
             label="❌",
             help="Remove the previous user message and assistant response."):
-            if st.session_state.chat_mode == "Text Chat":
-                st.session_state.messages = st.session_state.messages[:-2]
-            elif st.session_state.chat_mode == "Text Adventure Game":
-                st.session_state.messages_text_adventure_game = st.session_state.messages_text_adventure_game[:-2]
-            elif st.session_state.chat_mode == "Story Writer":
-                st.session_state.messages_story_writer = st.session_state.messages_story_writer[:-2]
-            elif st.session_state.chat_mode == "Code Writer":
-                st.session_state.messages_code_writer = st.session_state.messages_code_writer[:-2]
+            st.session_state.messages = st.session_state.messages[:-2]
             st.rerun()
     with col2:
         def edit_message():
@@ -173,35 +202,15 @@ with sidebar:
         if st.button(
             label="🔄️",
             help="Resubmit the previous message to get a new response."):
-            if st.session_state.chat_mode == "Text Chat":
-                st.session_state.messages = st.session_state.messages[:-1]
-                response = get_text_to_text("text_chat", progress_bar)
-            elif st.session_state.chat_mode == "Text Adventure Game":
-                st.session_state.messages_text_adventure_game = st.session_state.messages_text_adventure_game[:-1]
-                response = get_text_to_text("text_adventure_game", progress_bar)
-            elif st.session_state.chat_mode == "Story Writer":
-                st.session_state.messages_story_writer = st.session_state.messages_story_writer[:-1]
-                response = get_text_to_text("story_writer", )
-            elif st.session_state.chat_mode == "Code Writer":
-                st.session_state.messages_code_writer = st.session_state.messages_code_writer[:-1]
-                response = get_text_to_text("code_writer", progress_bar)
+            st.session_state.messages = st.session_state.messages[:-1]
+            response = get_text_to_text("text_chat", progress_bar)
             st.rerun()
     with col4:
         if st.button(
         label="🗑️",
         help="Start a new conversation."):
-            if st.session_state.chat_mode == "Text Chat":
-                st.session_state.messages = TEXT_CHAT_DEFAULT.copy()
-                st.session_state.usage_info = {}
-            elif st.session_state.chat_mode == "Text Adventure Game":
-                st.session_state.messages_text_adventure_game = TEXT_ADVENTURE_GAME_DEFAULT.copy()
-                st.session_state.usage_info = {}
-            elif st.session_state.chat_mode == "Story Writer":
-                st.session_state.messages_story_writer = STORY_WRITER_DEFAULT.copy()
-                st.session_state.usage_info = {}
-            elif st.session_state.chat_mode == "Code Writer":
-                st.session_state.messages_code_writer = CODE_WRITER_DEFAULT.copy()
-                st.session_state.usage_info = {}
+            st.session_state.messages = TEXT_CHAT_DEFAULT.copy()
+            st.session_state.usage_info = {}
             st.rerun()
     with col5:
         st.download_button(
@@ -226,11 +235,6 @@ with sidebar:
         import_conversations(uploaded_file)
         update_key("chat")
         st.rerun()
-    sidebar.markdown("## Chat Options")
-    st.session_state.chat_mode = sidebar.selectbox(
-        label="Select Chat Mode",
-        help="Select the chat mode to use. Different chat modes serve different purposes and generate different types of responses.", 
-        options=["Text Chat", "Text Adventure Game", "Story Writer", "Code Writer"])
     
     upload_pdf = st.file_uploader(
     label = "Upload a PDF file", 
@@ -240,147 +244,43 @@ with sidebar:
     key=st.session_state.pdf_uploader_key)
     if upload_pdf:
         text = pdf_to_text(upload_pdf)
-        if st.session_state.chat_mode == "Text Chat":
-            st.session_state.messages.append({'role': 'user', 'type': 'PDF', 'file_name': upload_pdf.name, 'content': f"PDF File Content:\n\n{text}"})
-        elif st.session_state.chat_mode == "Text Adventure Game":
-            st.session_state.messages.append({'role': 'system', 'type': 'PDF', 'file_name': upload_pdf.name, 'content': f"PDF File Content:\n\n{text}"})
-        elif st.session_state.chat_mode == "Story Writer":
-            st.session_state.messages.append({'role': 'system', 'type': 'PDF', 'file_name': upload_pdf.name, 'content': f"PDF File Content:\n\n{text}"})
-        elif st.session_state.chat_mode == "Code Writer":
-            st.session_state.messages.append({'role': 'system', 'type': 'PDF', 'file_name': upload_pdf.name, 'content': f"PDF File Content:\n\n{text}"})
+        st.session_state.messages.append({'role': 'user', 'type': 'PDF', 'file_name': upload_pdf.name, 'content': f"PDF File Content:\n\n{text}"})
         update_key("pdf")
         st.rerun()
 
 # Main Interface
-if st.session_state.chat_mode == "Text Chat":
-    st.chat_message("assistant").markdown("Hello! How can I help you today?")
-    total_messages = len(st.session_state.messages)
-    for index, message in enumerate(st.session_state.messages[2:]):
-        if index == total_messages - 4:
-            if st.session_state.edit_mode == True:
-                editor = st.empty()
-                new_message = editor.text_input("Edit last message", value=message["content"])
-                if new_message is not message["content"]:
-                    editor.empty()
-                    st.session_state.messages[-2]["content"] = new_message
-                    del st.session_state.messages[-1]
-                    st.session_state.edit_mode = False
-                    st.chat_message("user").markdown(new_message)
-                    get_text_to_text("text_chat")
-                    st.rerun()
-            else:
-                if message["type"] == "PDF":
-                    st.chat_message("user").expander(message["file_name"], expanded=False).markdown(message["content"])
-                elif message["role"] != "system":
-                    st.chat_message(message["role"]).markdown(message["content"])
-                    if message["role"] == "assistant" and "model" in message:
-                        st.caption(f"Generated by: {message['model']}")
+total_messages = len(st.session_state.messages)
+for index, message in enumerate(st.session_state.messages):
+    if index == total_messages - 4:
+        if st.session_state.edit_mode == True:
+            editor = st.empty()
+            new_message = editor.text_input("Edit last message", value=message["content"])
+            if new_message is not message["content"]:
+                editor.empty()
+                st.session_state.messages[-2]["content"] = new_message
+                del st.session_state.messages[-1]
+                st.session_state.edit_mode = False
+                st.chat_message("user").markdown(new_message)
+                get_text_to_text("text_chat")
+                st.rerun()
         else:
             if message["type"] == "PDF":
                 st.chat_message("user").expander(message["file_name"], expanded=False).markdown(message["content"])
             elif message["role"] != "system":
+                if message.get("reasoning"):
+                    st.chat_message("assistant").expander("Reasoning", expanded=False).markdown(message["reasoning"])
                 st.chat_message(message["role"]).markdown(message["content"])
-                if message["role"] == "assistant" and "model" in message:
-                    st.caption(f"Generated by: {message['model']}") 
-               
-elif st.session_state.chat_mode == "Text Adventure Game":
-    st.chat_message("assistant").markdown("Let's start the text adventure game!")
-    total_messages = len(st.session_state.messages_text_adventure_game)
-    for index, message in enumerate(st.session_state.messages_text_adventure_game[4:]):
-        if index == total_messages - 6:
-            if st.session_state.edit_mode == True:
-                editor = st.empty()
-                new_message = editor.text_input("Edit last message", value=message["content"])
-                if new_message is not message["content"]:
-                    editor.empty()
-                    st.session_state.messages_text_adventure_game[-2]["content"] = new_message
-                    del st.session_state.messages_text_adventure_game[-1]
-                    st.session_state.edit_mode = False
-                    st.chat_message("user").markdown(new_message)
-                    get_text_to_text("text_adventure_game")
-                    st.rerun()
-            else:
-                if message["type"] == "PDF":
-                    st.chat_message("user").expander(message["file_name"], expanded=False).markdown(message["content"])
-                elif message["role"] != "system":
-                    st.chat_message(message["role"]).markdown(message["content"])
-                    # Display model name if available for assistant messages
-                    if message["role"] == "assistant" and "model" in message:
-                        st.caption(f"Generated by: {message['model']}")
-        else:
-            if message["type"] == "PDF":
-                st.chat_message("user").expander(message["file_name"], expanded=False).markdown(message["content"])
-            if message["role"] != "system":
-                st.chat_message(message["role"]).markdown(message["content"])
-                # Display model name if available for assistant messages
                 if message["role"] == "assistant" and "model" in message:
                     st.caption(f"Generated by: {message['model']}")
-    
-elif st.session_state.chat_mode == "Story Writer":
-    st.chat_message("assistant").markdown("Let's start writing a story!")
-    total_messages = len(st.session_state.messages_story_writer)
-    for index, message in enumerate(st.session_state.messages_story_writer[2:]):
-        if index == total_messages - 4:
-            if st.session_state.edit_mode == True:
-                editor = st.empty()
-                new_message = editor.text_input("Edit last message", value=message["content"])
-                if new_message is not message["content"]:
-                    editor.empty()
-                    st.session_state.messages_story_writer[-2]["content"] = new_message
-                    del st.session_state.messages_story_writer[-1]
-                    st.session_state.edit_mode = False
-                    st.chat_message("user").markdown(new_message)
-                    get_text_to_text("story_writer")
-                    st.rerun()
-            else:
-                if message["type"] == "PDF":
-                    st.chat_message("user").expander(message["file_name"], expanded=False).markdown(message["content"])
-                elif message["role"] != "system":
-                    st.chat_message(message["role"]).markdown(message["content"])
-                    # Display model name if available for assistant messages
-                    if message["role"] == "assistant" and "model" in message:
-                        st.caption(f"Generated by: {message['model']}")
-        else:
-            if message["type"] == "PDF":
-                st.chat_message("user").expander(message["file_name"], expanded=False).markdown(message["content"])
-            if message["role"] != "system":
-                st.chat_message(message["role"]).markdown(message["content"])
-                # Display model name if available for assistant messages
-                if message["role"] == "assistant" and "model" in message:
-                    st.caption(f"Generated by: {message['model']}")
-
-elif st.session_state.chat_mode == "Code Writer":
-    st.chat_message("assistant").markdown("What code would you like me to write?")
-    total_messages = len(st.session_state.messages_code_writer)
-    for index, message in enumerate(st.session_state.messages_code_writer[2:]):
-        if index == total_messages - 4:
-            if st.session_state.edit_mode == True:
-                editor = st.empty()
-                new_message = editor.text_input("Edit last message", value=message["content"])
-                if new_message is not message["content"]:
-                    editor.empty()
-                    st.session_state.messages_code_writer[-2]["content"] = new_message
-                    del st.session_state.messages_code_writer[-1]
-                    st.session_state.edit_mode = False
-                    st.chat_message("user").markdown(new_message)
-                    get_text_to_text("code_writer")
-                    st.rerun()
-            else:
-                if message["type"] == "PDF":
-                    st.chat_message("user").expander(message["file_name"], expanded=False).markdown(message["content"])
-                elif message["role"] != "system":
-                    st.chat_message(message["role"]).markdown(message["content"])
-                    # Display model name if available for assistant messages
-                    if message["role"] == "assistant" and "model" in message:
-                        st.caption(f"Generated by: {message['model']}")
-        else:
-            if message["type"] == "PDF":
-                st.chat_message("user").expander(message["file_name"], expanded=False).markdown(message["content"])
-            if message["role"] != "system":
-                st.chat_message(message["role"]).markdown(message["content"])
-                # Display model name if available for assistant messages
-                if message["role"] == "assistant" and "model" in message:
-                    st.caption(f"Generated by: {message['model']}")
+    else:
+        if message["type"] == "PDF":
+            st.chat_message("user").expander(message["file_name"], expanded=False).markdown(message["content"])
+        elif message["role"] != "system":
+            if message.get("reasoning"):
+                st.chat_message("assistant").expander("Reasoning", expanded=False).markdown(message["reasoning"])
+            st.chat_message(message["role"]).markdown(message["content"])
+            if message["role"] == "assistant" and "model" in message:
+                st.caption(f"Generated by: {message['model']}")
 
 # Accept user input
 input_container = st.empty()
@@ -389,37 +289,31 @@ if prompt:
     st.chat_message("user").markdown(prompt)
     progress_bar = st.empty()
     current_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    if st.session_state.chat_mode == "Text Chat":
-        st.session_state.messages.append({'role': 'system', 'type': 'message', 'content': "Current Date and Time: " + current_date})
-        st.session_state.messages.append({'role': 'user', 'type': 'message', 'content': prompt})
-        input_container.empty()
-        response = get_text_to_text("text_chat", progress_bar)
-    elif st.session_state.chat_mode == "Text Adventure Game":
-        st.session_state.messages_text_adventure_game.append({'role': 'system', 'type': 'message', 'content': "Current Date and Time: " + current_date})
-        st.session_state.messages_text_adventure_game.append({'role': 'user', 'type': 'message', 'content': prompt})
-        input_container.empty()
-        response = get_text_to_text("text_adventure_game", progress_bar)
-    elif st.session_state.chat_mode == "Story Writer":
-        st.session_state.messages_story_writer.append({'role': 'system', 'type': 'message', 'content': "Current Date and Time: " + current_date})
-        st.session_state.messages_story_writer.append({'role': 'user', 'type': 'message', 'content': prompt})
-        input_container.empty()
-        response = get_text_to_text("story_writer", progress_bar)
-    elif st.session_state.chat_mode == "Code Writer":
-        st.session_state.messages_code_writer.append({'role': 'system', 'type': 'message', 'content': "Current Date and Time: " + current_date})
-        st.session_state.messages_code_writer.append({'role': 'user', 'type': 'message', 'content': prompt})
-        input_container.empty()
-        response = get_text_to_text("code_writer", progress_bar)
+    
+    # If user has set a system prompt, include it at the beginning of the current conversation
+    if st.session_state.system_prompt:
+        # Check if we need to add the system prompt (if it's not already the first message)
+        if not (len(st.session_state.messages) > 0 and 
+                st.session_state.messages[0].get('role') == 'system' and 
+                st.session_state.messages[0].get('content') == st.session_state.system_prompt):
+            # Insert system prompt at beginning of messages
+            st.session_state.messages.insert(0, {
+                'role': 'system', 
+                'type': 'message', 
+                'content': st.session_state.system_prompt
+            })
+    
+    # Add date and user message
+    st.session_state.messages.append({'role': 'system', 'type': 'message', 'content': "Current Date and Time: " + current_date})
+    st.session_state.messages.append({'role': 'user', 'type': 'message', 'content': prompt})
+    input_container.empty()
+    response = get_text_to_text("text_chat", progress_bar)
+    
     if st.session_state.autosave:
-        if st.session_state.chat_mode == "Text Chat":
-            with open(st.session_state.autosave_path, 'w') as f:
-                json.dump(st.session_state.messages, f, indent=4)
-        elif st.session_state.chat_mode == "Text Adventure Game":
-            with open(st.session_state.autosave_path, 'w') as f:
-                json.dump(st.session_state.messages_text_adventure_game, f, indent=4)
-        elif st.session_state.chat_mode == "Story Writer":
-            with open(st.session_state.autosave_path, 'w') as f:
-                json.dump(st.session_state.messages_story_writer, f, indent=4)
-        elif st.session_state.chat_mode == "Code Writer":
-            with open(st.session_state.autosave_path, 'w') as f:
-                json.dump(st.session_state.messages_code_writer, f, indent=4)
+        if st.session_state.docker_mode:
+            autosave_path = "/app/data/conversations.json"
+        else:
+            autosave_path = st.session_state.autosave_path
+        with open(autosave_path, 'w') as f:
+            json.dump(st.session_state.messages, f, indent=4)
     st.rerun()

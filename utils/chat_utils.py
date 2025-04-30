@@ -10,21 +10,18 @@ def update_key(module):
     if module == "pdf":
         st.session_state.pdf_uploader_key += 1
 
-def get_text_to_text(mode, progress_bar):
+def get_text_to_text(mode, progress_bar=None):
     """Get response from the selected model API"""
-    # Get the appropriate message list based on chat mode
-    if mode == "text_chat":
-        message = st.session_state.messages
-    elif mode == "text_adventure_game":
-        message = st.session_state.messages_text_adventure_game
-    elif mode == "story_writer":
-        message = st.session_state.messages_story_writer
-    elif mode == "code_writer":
-        message = st.session_state.messages_code_writer
+
+    message = st.session_state.messages
     
     # Initialize the progress bar
-    progress = progress_bar.progress(0, "Preparing request...")
-    start_time = time.time()
+    if progress_bar:
+        progress = progress_bar.progress(0, "Preparing request...")
+        start_time = time.time()
+    else:
+        progress = None
+        start_time = time.time()
     
     # Choose model provider based on session state
     if st.session_state.model_provider == "Local Model":
@@ -45,24 +42,10 @@ def get_text_to_text(mode, progress_bar):
 
 def export_conversations():
     """Export conversation history to JSON"""
-    if st.session_state.chat_mode == "Text Chat":
-        export_data = json.dumps(st.session_state.messages)
-    elif st.session_state.chat_mode == "Text Adventure Game":
-        export_data = json.dumps(st.session_state.messages_text_adventure_game)
-    elif st.session_state.chat_mode == "Story Writer":
-        export_data = json.dumps(st.session_state.messages_story_writer)
-    elif st.session_state.chat_mode == "Code Writer":
-        export_data = json.dumps(st.session_state.messages_code_writer)
+    export_data = json.dumps(st.session_state.messages)
     return export_data
 
 def import_conversations(uploaded_file):
     """Import conversation history from JSON"""
     json_file = json.load(uploaded_file)
-    if st.session_state.chat_mode == "Text Chat":
-        st.session_state.messages = json_file
-    elif st.session_state.chat_mode == "Text Adventure Game":
-        st.session_state.messages_text_adventure_game = json_file
-    elif st.session_state.chat_mode == "Story Writer":
-        st.session_state.messages_story_writer = json_file
-    elif st.session_state.chat_mode == "Code Writer":
-        st.session_state.messages_code_writer = json_file
+    st.session_state.messages = json_file

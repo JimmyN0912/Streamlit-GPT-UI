@@ -1,0 +1,30 @@
+# Git
+.git
+.gitignore
+.github
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+.mypy_cache/
+*.so
+.Python
+env/
+venv/
+ENV/
+.env.local
+.venv
+.pytest_cache
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Editor directories and files
+.idea
+.vscode
+*.swp
+*.swo

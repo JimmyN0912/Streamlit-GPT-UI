@@ -1,0 +1,31 @@
+services:
+  streamlit-app:
+    build: .
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./.env:/app/.env
+      - ./data:/app/data
+    networks:
+      - app-network
+    depends_on:
+      - relay-server
+    environment:
+      - IN_DOCKER=true
+
+  relay-server:
+    build: .
+    command: python server-relay.py
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./.env:/app/.env
+      - ./data:/app/data
+    networks:
+      - app-network
+    environment:
+      - IN_DOCKER=true
+
+networks:
+  app-network:
+    driver: bridge

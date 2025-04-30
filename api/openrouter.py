@@ -13,7 +13,7 @@ ACCOUNT_ID = getenv("CLOUDFLARE_ACCOUNT_ID")
 GATEWAY_ID = getenv("CLOUDLFARE_AI_GATEWAY_GATEWAY_ID")
 url = f"https://gateway.ai.cloudflare.com/v1/{ACCOUNT_ID}/{GATEWAY_ID}/openrouter/v1/chat/completions"
 
-# Available Cloudflare models
+# Available OpenRouter models
 models = {
     "NVIDIA Llama 3.3 Nemotron Super 49B v1": "nvidia/llama-3.3-nemotron-super-49b-v1:free",
     "NVIDIA Llama 3.1 Nemotron Ultra 253B V1": "nvidia/llama-3.1-nemotron-ultra-253b-v1:free",
@@ -99,14 +99,26 @@ def get_response(message, mode, progress_bar):
         }
         
         # Add the response to the appropriate message list
-        if mode == "text_chat":
-            st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': model_name})
-        elif mode == "text_adventure_game":
-            st.session_state.messages_text_adventure_game.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': model_name})
-        elif mode == "story_writer":
-            st.session_state.messages_story_writer.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': model_name})
-        elif mode == "code_writer":
-            st.session_state.messages_code_writer.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': model_name})
+        if response_data['choices'][0]['message']['reasoning']:
+            if mode == "text_chat":
+                st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'reasoning': response_data['choices'][0]['message']['reasoning'], 'model': model_name})
+            elif mode == "text_adventure_game":
+                st.session_state.messages_text_adventure_game.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'reasoning': response_data['choices'][0]['message']['reasoning'], 'model': model_name})
+            elif mode == "story_writer":
+                st.session_state.messages_story_writer.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'reasoning': response_data['choices'][0]['message']['reasoning'], 'model': model_name})
+            elif mode == "code_writer":
+                st.session_state.messages_code_writer.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'reasoning': response_data['choices'][0]['message']['reasoning'], 'model': model_name})
+        
+        else:
+            if mode == "text_chat":
+                st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': model_name})
+            elif mode == "text_adventure_game":
+                st.session_state.messages_text_adventure_game.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': model_name})
+            elif mode == "story_writer":
+                st.session_state.messages_story_writer.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': model_name})
+            elif mode == "code_writer":
+                st.session_state.messages_code_writer.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': model_name})
+
         progress_bar.progress(100, "Response processed successfully.")
         time.sleep(1)
         progress_bar.empty()
