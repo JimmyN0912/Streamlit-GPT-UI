@@ -1,0 +1,35 @@
+name: Docker Image Build
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v2
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Build Docker Image
+      run: docker build . --file Dockerfile --tag streamlit-gpt-ui:${{ github.sha::7 }} --tag streamlit-gpt-ui:latest
+
+    - name: Scan Docker Image
+      run: docker scan streamlit-gpt-ui:latest
+
+    - name: Push Docker Image
+      run: |
+        docker push ghcr.io/${{ github.repository_owner }}/streamlit-gpt-ui:latest
+        docker push ghcr.io/${{ github.repository_owner }}/streamlit-gpt-ui:${{ github.sha::7 }}
