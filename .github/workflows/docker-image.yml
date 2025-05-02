@@ -22,10 +22,21 @@ jobs:
 
     - name: Checkout Code
       uses: actions/checkout@v3
+      
+    - name: Set build number
+      id: build_number
+      run: echo "build_number=b$(printf "%04d" ${{ github.run_number }})" >> "$GITHUB_OUTPUT"
+      
+    - name: Set short SHA
+      id: short_sha
+      run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
     - name: Build Docker Image
-      run: docker build . --file Dockerfile --tag ghcr.io/jimmyn0912/streamlit-gpt-ui/streamlit-gpt-ui:latest
+      run: |
+        docker build . --file Dockerfile --tag ghcr.io/jimmyn0912/streamlit-gpt-ui/streamlit-gpt-ui:latest --tag ghcr.io/jimmyn0912/streamlit-gpt-ui/streamlit-gpt-ui:${{ steps.build_number.outputs.build_number }} --tag ghcr.io/jimmyn0912/streamlit-gpt-ui/streamlit-gpt-ui:${{ steps.short_sha.outputs.short_sha }}
 
     - name: Push Docker Image
       run: |
         docker push ghcr.io/jimmyn0912/streamlit-gpt-ui/streamlit-gpt-ui:latest
+        docker push ghcr.io/jimmyn0912/streamlit-gpt-ui/streamlit-gpt-ui:${{ steps.build_number.outputs.build_number }}
+        docker push ghcr.io/jimmyn0912/streamlit-gpt-ui/streamlit-gpt-ui:${{ steps.short_sha.outputs.short_sha }}
