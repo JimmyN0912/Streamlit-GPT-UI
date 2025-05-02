@@ -24,7 +24,7 @@ jobs:
       uses: actions/checkout@v3
 
     - name: Build Docker Image
-      run: docker build . --file Dockerfile --tag streamlit-gpt-ui:${{ github.sha::7 }} --tag streamlit-gpt-ui:latest
+      run: docker build . --file Dockerfile --tag streamlit-gpt-ui:${{ github.sha.substr(0, 7) }} --tag streamlit-gpt-ui:latest
 
     - name: Scan Docker Image
       run: docker scan streamlit-gpt-ui:latest
@@ -32,4 +32,4 @@ jobs:
     - name: Push Docker Image
       run: |
         docker push ghcr.io/${{ github.repository_owner }}/streamlit-gpt-ui:latest
-        docker push ghcr.io/${{ github.repository_owner }}/streamlit-gpt-ui:${{ github.sha::7 }}
+        docker push ghcr.io/${{ github.repository_owner }}/streamlit-gpt-ui:${{ github.sha.substr(0, 7) }}
