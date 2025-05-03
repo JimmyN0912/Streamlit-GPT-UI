@@ -30,11 +30,11 @@ jobs:
 
     - name: Tag Docker images
       run: |
-        docker tag streamlit-gpt-ui_streamlit-app ghcr.io/jimmyn0912/streamlit-gpt-ui/streamlit-app:latest
-        docker tag streamlit-gpt-ui_streamlit-app ghcr.io/jimmyn0912/streamlit-gpt-ui/streamlit-app:${{ steps.build_number.outputs.build_number }}
+        docker tag streamlit-gpt-ui-streamlit-app ghcr.io/jimmyn0912/streamlit-gpt-ui/streamlit-app:latest
+        docker tag streamlit-gpt-ui-streamlit-app ghcr.io/jimmyn0912/streamlit-gpt-ui/streamlit-app:${{ steps.build_number.outputs.build_number }}
 
-        docker tag streamlit-gpt-ui_relay-server ghcr.io/jimmyn0912/streamlit-gpt-ui/relay-server:latest
-        docker tag streamlit-gpt-ui_relay-server ghcr.io/jimmyn0912/streamlit-gpt-ui/relay-server:${{ steps.build_number.outputs.build_number }}
+        docker tag streamlit-gpt-ui-relay-server ghcr.io/jimmyn0912/streamlit-gpt-ui/relay-server:latest
+        docker tag streamlit-gpt-ui-relay-server ghcr.io/jimmyn0912/streamlit-gpt-ui/relay-server:${{ steps.build_number.outputs.build_number }}
 
     - name: Push Docker Images
       run: |
