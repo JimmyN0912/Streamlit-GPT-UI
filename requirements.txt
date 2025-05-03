@@ -6,3 +6,4 @@ google-genai
 cohere
 python-dotenv
 requests
+openai

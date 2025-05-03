@@ -5,6 +5,7 @@ import uuid
 import os
 import re
 import json
+from utils.check_model import get_current_model_name
 
 # Check if running in Docker (environment variable can be set in docker-compose.yml)
 IN_DOCKER = os.environ.get('IN_DOCKER', 'false').lower() == 'true'
@@ -107,7 +108,7 @@ def get_streaming_response(message, mode, progress_bar, start_time):
             # If we can't get token counts, just continue
             pass
         
-        model_name = "Local Model"
+        model_name = "Local" + get_current_model_name()
         st.session_state.usage_info = {
             'prompt_tokens': prompt_tokens,
             'completion_tokens': completion_tokens,
@@ -196,7 +197,7 @@ def get_response(message, mode, progress_bar, start_time):
             # Extract thinking content if present
             clean_message, thinking_content = extract_thinking(assistant_message)
             
-            model_name = "Local Model" # For local model, hardcode the name
+            model_name = "Local" + get_current_model_name()
             st.session_state.usage_info = {
                 'prompt_tokens': response_data['prompt_tokens'],
                 'completion_tokens': response_data['completion_tokens'],

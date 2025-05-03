@@ -7,6 +7,7 @@ import os
 from utils.constants import (TEXT_CHAT_DEFAULT)
 from utils.pdf_utils import pdf_to_text
 from utils.chat_utils import update_key, get_text_to_text, export_conversations, import_conversations
+from utils import check_model
 from api import gemini, cloudflare, cohere, openrouter, groq
 
 # Initialize session state variables
@@ -50,6 +51,9 @@ if "edit_mode" not in st.session_state:
 if "model_provider" not in st.session_state:
     st.session_state.model_provider = "Local Model"
 
+if "local_model" not in st.session_state:
+    st.session_state.local_model = None
+
 if "gemini_model" not in st.session_state:
     st.session_state.gemini_model = "gemini-1.5-pro"
 
@@ -68,7 +72,11 @@ if "groq_model" not in st.session_state:
 # Set page config
 st.set_page_config(page_title="Text Chat Bot", page_icon="🤖", layout="wide", menu_items={"Report a bug": "mailto:ljsh1111031@ljsh.hcc.edu.tw"})
 if st.session_state.model_provider == "Local Model":
-    st.badge("Current AI Model: Local model")
+    st.session_state.local_model = check_model.get_current_model_name()
+    if st.session_state.local_model == None:
+        st.badge("Local Model is not running. Please check the model server.")
+    else:
+        st.badge(f"Current AI Model: {st.session_state.local_model}")
 elif st.session_state.model_provider == "Google Gemini":
     st.badge(f"Current AI Model: {st.session_state.gemini_model}")
 elif st.session_state.model_provider == "Cloudflare Workers AI":
@@ -89,7 +97,7 @@ with sidebar:
     st.session_state.model_provider = st.selectbox(
         label="Model Provider",
         help="Select the AI model provider to use for generating responses.",
-        options=["Local Model", "Google Gemini", "Cloudflare Workers AI", "Cohere", "OpenRouter", "Groq"],
+        options=["Local Model", "Google Gemini", "Cloudflare Workers AI", "Cohere", "OpenRouter", "Groq"]
     )
     
     # Add system prompt input
@@ -179,9 +187,9 @@ with sidebar:
     st.session_state.max_tokens = st.slider(
         label="Max Tokens",
         help="The maximum number of tokens to generate in the response.", 
-        min_value=256, 
-        max_value=4096, 
-        value=1024, 
+        min_value=1024, 
+        max_value=16384, 
+        value=8192, 
         step=256)
     col1, col2, col3, col4, col5 = st.columns([1, 1, 1, 1, 1])
     with col1:
