@@ -26,7 +26,7 @@ jobs:
       run: echo "build_number=b$(printf "%04d" ${{ github.run_number }})" >> "$GITHUB_OUTPUT"
 
     - name: Build with docker-compose
-      run: docker-compose build
+      run: docker compose build
 
     - name: Tag Docker images
       run: |
