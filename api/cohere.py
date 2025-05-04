@@ -30,7 +30,7 @@ models = {
     "Command Light Nightly": "command-light-nightly"
 }
 
-def get_response(message, mode, progress_bar):
+def get_response(message, progress_bar):
     """Get response from Cohere API"""
     messages = [{"role": msg['role'], "content": msg['content']} for msg in message]
     progress_bar.progress(20, "Sending request to Cohere...")
@@ -54,15 +54,8 @@ def get_response(message, mode, progress_bar):
             'elapsed_time': ''
         }
     
-    # Add the response to the appropriate message list
-    if mode == "text_chat":
-        st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': model_name})
-    elif mode == "text_adventure_game":
-        st.session_state.messages_text_adventure_game.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': model_name})
-    elif mode == "story_writer":
-        st.session_state.messages_story_writer.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': model_name})
-    elif mode == "code_writer":
-        st.session_state.messages_code_writer.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': model_name})
+    st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': model_name})
+    
     progress_bar.progress(100, "Response processed successfully.")
     time.sleep(1)
     progress_bar.empty()

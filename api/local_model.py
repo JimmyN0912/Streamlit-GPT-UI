@@ -40,7 +40,7 @@ def extract_thinking(text):
     # If no thinking tags found, return original text and None
     return text, None
 
-def get_streaming_response(message, mode, progress_bar, start_time):
+def get_streaming_response(message, progress_bar, start_time, message_placeholder):
     """Get streamed response from local model via relay server"""
     request_id = str(uuid.uuid4())
     
@@ -55,7 +55,6 @@ def get_streaming_response(message, mode, progress_bar, start_time):
     progress_bar.progress(20, "Sending streaming request...")
     
     # Create a placeholder for the streaming text
-    message_placeholder = st.empty()
     full_response = ""
     
     try:
@@ -108,7 +107,7 @@ def get_streaming_response(message, mode, progress_bar, start_time):
             # If we can't get token counts, just continue
             pass
         
-        model_name = "Local" + get_current_model_name()
+        model_name = "Local " + get_current_model_name()
         st.session_state.usage_info = {
             'prompt_tokens': prompt_tokens,
             'completion_tokens': completion_tokens,
@@ -116,27 +115,10 @@ def get_streaming_response(message, mode, progress_bar, start_time):
             'elapsed_time': round(end_time - start_time, 2)
         }
         
-        # Add the response to the appropriate message list
-        if mode == "text_chat":
-            if thinking_content:
-                st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': clean_message, 'reasoning': thinking_content, 'model': model_name})
-            else:
-                st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': clean_message, 'model': model_name})
-        elif mode == "text_adventure_game":
-            if thinking_content:
-                st.session_state.messages_text_adventure_game.append({'role': 'assistant', 'type': 'message', 'content': clean_message, 'reasoning': thinking_content, 'model': model_name})
-            else:
-                st.session_state.messages_text_adventure_game.append({'role': 'assistant', 'type': 'message', 'content': clean_message, 'model': model_name})
-        elif mode == "story_writer":
-            if thinking_content:
-                st.session_state.messages_story_writer.append({'role': 'assistant', 'type': 'message', 'content': clean_message, 'reasoning': thinking_content, 'model': model_name})
-            else:
-                st.session_state.messages_story_writer.append({'role': 'assistant', 'type': 'message', 'content': clean_message, 'model': model_name})
-        elif mode == "code_writer":
-            if thinking_content:
-                st.session_state.messages_code_writer.append({'role': 'assistant', 'type': 'message', 'content': clean_message, 'reasoning': thinking_content, 'model': model_name})
-            else:
-                st.session_state.messages_code_writer.append({'role': 'assistant', 'type': 'message', 'content': clean_message, 'model': model_name})
+        if thinking_content:
+            st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': clean_message, 'reasoning': thinking_content, 'model': model_name})
+        else:
+            st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': clean_message, 'model': model_name})
         
         # Clear the placeholder
         message_placeholder.empty()
@@ -148,11 +130,11 @@ def get_streaming_response(message, mode, progress_bar, start_time):
         progress_bar.empty()
         return None
 
-def get_response(message, mode, progress_bar, start_time):
+def get_response(message, progress_bar, start_time, message_placeholder=None):
     """Get response from local model via relay server"""
     # If streaming is enabled in session state, use streaming response
     if "enable_streaming" in st.session_state and st.session_state.enable_streaming:
-        return get_streaming_response(message, mode, progress_bar, start_time)
+        return get_streaming_response(message, progress_bar, start_time, message_placeholder)
     
     # Original non-streaming implementation
     request_id = str(uuid.uuid4())
@@ -197,35 +179,17 @@ def get_response(message, mode, progress_bar, start_time):
             # Extract thinking content if present
             clean_message, thinking_content = extract_thinking(assistant_message)
             
-            model_name = "Local" + get_current_model_name()
+            model_name = "Local " + get_current_model_name()
             st.session_state.usage_info = {
                 'prompt_tokens': response_data['prompt_tokens'],
                 'completion_tokens': response_data['completion_tokens'],
                 'total_tokens': response_data['total_tokens'],
                 'elapsed_time': round(end_time - start_time, 2)
             }
-            
-            # Add the response to the appropriate message list with model name
-            if mode == "text_chat":
-                if thinking_content:
-                    st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': clean_message, 'reasoning': thinking_content, 'model': model_name})
-                else:
-                    st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': clean_message, 'model': model_name})
-            elif mode == "text_adventure_game":
-                if thinking_content:
-                    st.session_state.messages_text_adventure_game.append({'role': 'assistant', 'type': 'message', 'content': clean_message, 'reasoning': thinking_content, 'model': model_name})
-                else:
-                    st.session_state.messages_text_adventure_game.append({'role': 'assistant', 'type': 'message', 'content': clean_message, 'model': model_name})
-            elif mode == "story_writer":
-                if thinking_content:
-                    st.session_state.messages_story_writer.append({'role': 'assistant', 'type': 'message', 'content': clean_message, 'reasoning': thinking_content, 'model': model_name})
-                else:
-                    st.session_state.messages_story_writer.append({'role': 'assistant', 'type': 'message', 'content': clean_message, 'model': model_name})
-            elif mode == "code_writer":
-                if thinking_content:
-                    st.session_state.messages_code_writer.append({'role': 'assistant', 'type': 'message', 'content': clean_message, 'reasoning': thinking_content, 'model': model_name})
-                else:
-                    st.session_state.messages_code_writer.append({'role': 'assistant', 'type': 'message', 'content': clean_message, 'model': model_name})
+            if thinking_content:
+                st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': clean_message, 'reasoning': thinking_content, 'model': model_name})
+            else:
+                st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': clean_message, 'model': model_name})
             
             progress_bar.progress(100, "Response processed successfully.")
             time.sleep(1)

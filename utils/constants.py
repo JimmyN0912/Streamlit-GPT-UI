@@ -1,6 +1,6 @@
 # Default chat template
 
-TEXT_CHAT_DEFAULT = [
+CHAT_DEFAULT = [
     {
         'role': 'assistant',
         'type': 'message',

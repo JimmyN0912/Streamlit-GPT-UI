@@ -10,7 +10,7 @@ def update_key(module):
     if module == "pdf":
         st.session_state.pdf_uploader_key += 1
 
-def get_text_to_text(mode, progress_bar=None):
+def get_text_to_text(progress_bar=None, message_placeholder=None):
     """Get response from the selected model API"""
 
     message = st.session_state.messages
@@ -22,23 +22,39 @@ def get_text_to_text(mode, progress_bar=None):
     else:
         progress = None
         start_time = time.time()
-    
-    # Choose model provider based on session state
-    if st.session_state.model_provider == "Local Model":
-        return local_model.get_response(message, mode, progress, start_time)
-    elif st.session_state.model_provider == "Google Gemini":
-        return gemini.get_response(message, mode, progress)
-    elif st.session_state.model_provider == "Cloudflare Workers AI":
-        return cloudflare.get_response(message, mode, progress)
-    elif st.session_state.model_provider == "Cohere":
-        return cohere.get_response(message, mode, progress)
-    elif st.session_state.model_provider == "OpenRouter":
-        return openrouter.get_response(message, mode, progress)
-    elif st.session_state.model_provider == "Groq":
-        return groq.get_response(message, mode, progress)
+    if message_placeholder:
+        if st.session_state.model_provider == "Local Model":
+            return local_model.get_response(message, progress, start_time, message_placeholder)
+        elif st.session_state.model_provider == "Google Gemini":
+            return gemini.get_response(message, progress)
+        elif st.session_state.model_provider == "Cloudflare Workers AI":
+            return cloudflare.get_response(message, progress)
+        elif st.session_state.model_provider == "Cohere":
+            return cohere.get_response(message, progress)
+        elif st.session_state.model_provider == "OpenRouter":
+            return openrouter.get_response(message, progress)
+        elif st.session_state.model_provider == "Groq":
+            return groq.get_response(message, progress)
+        else:
+            st.error(f"Unknown model provider: {st.session_state.model_provider}")
+            return None
     else:
-        st.error(f"Unknown model provider: {st.session_state.model_provider}")
-        return None
+        # Choose model provider based on session state
+        if st.session_state.model_provider == "Local Model":
+            return local_model.get_response(message, progress, start_time)
+        elif st.session_state.model_provider == "Google Gemini":
+            return gemini.get_response(message, progress)
+        elif st.session_state.model_provider == "Cloudflare Workers AI":
+            return cloudflare.get_response(message, progress)
+        elif st.session_state.model_provider == "Cohere":
+            return cohere.get_response(message, progress)
+        elif st.session_state.model_provider == "OpenRouter":
+            return openrouter.get_response(message, progress)
+        elif st.session_state.model_provider == "Groq":
+            return groq.get_response(message, progress)
+        else:
+            st.error(f"Unknown model provider: {st.session_state.model_provider}")
+            return None
 
 def export_conversations():
     """Export conversation history to JSON"""
