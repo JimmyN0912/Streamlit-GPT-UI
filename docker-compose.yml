@@ -14,8 +14,9 @@ services:
       - IN_DOCKER=true
 
   relay-server:
-    build: .
-    command: python server-relay.py
+    build:
+      context: .
+      dockerfile: Dockerfile.relay
     ports:
       - "5000:5000"
     volumes:
