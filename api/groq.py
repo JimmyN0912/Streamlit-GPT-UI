@@ -7,7 +7,7 @@ import time
 # Load environment variables
 load_dotenv()
 
-# Set up the API URL for Groq Cloud API via Cloudflare AI Getaway
+# Set up API Credentials
 API_KEY = getenv("GROQ_API_KEY")
 ACCOUNT_ID = getenv("CLOUDFLARE_ACCOUNT_ID")
 GATEWAY_ID = getenv("CLOUDLFARE_AI_GATEWAY_GATEWAY_ID")
@@ -27,13 +27,12 @@ models = {
     "Qwen QWQ 32B": "qwen-qwq-32b"
 }
 
-def get_response(message, mode, progress_bar):
+def get_response(message, progress_bar):
     """Get response from Cloudflare Workers AI API"""
-
-    progress_bar.progress(20, "Sending request to Groq API...")
-    
     messages = [{"role": msg['role'], "content": msg['content']} for msg in message]
-    
+
+    progress_bar.progress(50, "Sending request to Groq API...")
+
     response = requests.post(
         url=base_url,
         headers={"Authorization": f"Bearer {API_KEY}"},
@@ -46,6 +45,7 @@ def get_response(message, mode, progress_bar):
     )
     
     progress_bar.progress(90, "Response received, processing...")
+
     if response.status_code == 200:
         response_data = response.json()
         assistant_message = response_data['choices'][0]['message']['content']
@@ -53,8 +53,7 @@ def get_response(message, mode, progress_bar):
         st.session_state.usage_info = {
             'prompt_tokens': response_data['usage']['prompt_tokens'],
             'completion_tokens': response_data['usage']['completion_tokens'],
-            'total_tokens': response_data['usage']['total_tokens'],
-            'elapsed_time': ''
+            'total_tokens': response_data['usage']['total_tokens']
         }
         
         st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': model_name})

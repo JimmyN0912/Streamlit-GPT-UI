@@ -7,24 +7,17 @@ import re
 import json
 from utils.check_model import get_current_model_name
 
-# Check if running in Docker (environment variable can be set in docker-compose.yml)
-IN_DOCKER = os.environ.get('IN_DOCKER', 'false').lower() == 'true'
+relay_url = 'http://relay-server:5000/relay'
+response_url = 'http://relay-server:5000/response'
+queue_size_url = 'http://relay-server:5000/queue_size'
+status_url = 'http://relay-server:5000/status'
+stream_url = 'http://relay-server:5000/stream'
 
-# Choose URL endpoints based on environment
-if IN_DOCKER:
-    # Docker environment - use service name
-    relay_url = 'http://relay-server:5000/relay'
-    response_url = 'http://relay-server:5000/response'
-    queue_size_url = 'http://relay-server:5000/queue_size'
-    status_url = 'http://relay-server:5000/status'
-    stream_url = 'http://relay-server:5000/stream'
-else:
-    # Local environment - use localhost
-    relay_url = 'http://localhost:5000/relay'
-    response_url = 'http://localhost:5000/response'
-    queue_size_url = 'http://localhost:5000/queue_size'
-    status_url = 'http://localhost:5000/status'
-    stream_url = 'http://localhost:5000/stream'
+def check_request_status(request_id):
+        response = requests.get(f"{status_url}/{request_id}")
+        if response.status_code == 200:
+            return response.json()['status']
+        return 'unknown'
 
 def extract_thinking(text):
     """Extract thinking content from response text"""
@@ -52,18 +45,17 @@ def get_streaming_response(message, progress_bar, start_time, message_placeholde
         'stream': True
     }
     
-    progress_bar.progress(20, "Sending streaming request...")
-    
-    # Create a placeholder for the streaming text
+    progress_bar.progress(50, "Sending streaming request...")
+
     full_response = ""
     
     try:
         response = requests.post(stream_url, json=data, stream=True)
-        
-        # Update the placeholder with empty text to start
+
+        progress_bar.progress(70, "Streaming response...")
+
         message_placeholder.markdown("")
         
-        # Process the streaming response line by line
         for line in response.iter_lines():
             if line:
                 line = line.decode('utf-8')
@@ -73,46 +65,34 @@ def get_streaming_response(message, progress_bar, start_time, message_placeholde
                         break
                         
                     try:
-                        json_obj = json.loads(chunk_data)
-                        if 'choices' in json_obj and len(json_obj['choices']) > 0:
-                            if 'delta' in json_obj['choices'][0] and 'content' in json_obj['choices'][0]['delta']:
-                                chunk = json_obj['choices'][0]['delta']['content']
-                                full_response += chunk
-                                # Update the display with the accumulated response
-                                message_placeholder.markdown(full_response)
+                        data = json.loads(chunk_data)
+                        if 'choices' in data and len(data['choices']) > 0:
+                            if 'delta' in data['choices'][0] and 'content' in data['choices'][0]['delta']:
+                                full_response += data['choices'][0]['delta']['content']
+                                message_placeholder.markdown(full_response + "▌")
                     except json.JSONDecodeError:
-                        # Skip malformed JSON
                         continue
-        
-        # Process finished
-        end_time = time.time()
+
+        progress_bar.progress(90, "Response received, processing...")
         
         # Extract thinking content if present
         clean_message, thinking_content = extract_thinking(full_response)
         
-        # Get token counts from the final response
-        prompt_tokens = 0
-        completion_tokens = 0
-        total_tokens = 0
-        
-        # Try to get the final token counts if available
         try:
-            resp = requests.get(f"{response_url}/{request_id}")
-            if resp.status_code == 200:
-                response_data = resp.json()
+            response_2 = requests.get(f"{response_url}/{request_id}")
+            if response_2.status_code == 200:
+                response_data = response_2.json()
                 prompt_tokens = response_data.get('prompt_tokens', 0)
                 completion_tokens = response_data.get('completion_tokens', 0)
                 total_tokens = response_data.get('total_tokens', 0)
         except Exception:
-            # If we can't get token counts, just continue
             pass
         
         model_name = "Local " + get_current_model_name()
         st.session_state.usage_info = {
             'prompt_tokens': prompt_tokens,
             'completion_tokens': completion_tokens,
-            'total_tokens': total_tokens,
-            'elapsed_time': round(end_time - start_time, 2)
+            'total_tokens': total_tokens
         }
         
         if thinking_content:
@@ -120,7 +100,8 @@ def get_streaming_response(message, progress_bar, start_time, message_placeholde
         else:
             st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': clean_message, 'model': model_name})
         
-        # Clear the placeholder
+        progress_bar.progress(100, "Response processed successfully.")
+        time.sleep(1)
         message_placeholder.empty()
         progress_bar.empty()
         return clean_message
@@ -136,7 +117,6 @@ def get_response(message, progress_bar, start_time, message_placeholder=None):
     if "enable_streaming" in st.session_state and st.session_state.enable_streaming:
         return get_streaming_response(message, progress_bar, start_time, message_placeholder)
     
-    # Original non-streaming implementation
     request_id = str(uuid.uuid4())
     
     data = {
@@ -146,27 +126,21 @@ def get_response(message, progress_bar, start_time, message_placeholder=None):
         'temperature': st.session_state.temperature
     }
     
-    progress_bar.progress(20, "Sending request to the relay server...")
+    progress_bar.progress(50, "Sending request...")
     
     response = requests.post(relay_url, json=data)
     response_data = response.json()
     queue_position = response_data['position']
-    
-    # Update the progress bar
-    progress_bar.progress(30, f"Request sent, waiting in queue... (Position: {queue_position})")
 
-    def check_request_status(request_id):
-        response = requests.get(f"{status_url}/{request_id}")
-        if response.status_code == 200:
-            return response.json()['status']
-        return 'unknown'
+    progress_bar.progress(60, f"Request sent, waiting in queue... (Position: {queue_position})")
+
     
     # Poll the relay server for the response
     while True:
         status = check_request_status(request_id)
+
         if status == 'completed':
             progress_bar.progress(90, "Response received, processing...")
-            end_time = time.time()
             response = requests.get(f"{response_url}/{request_id}")
             response_data = response.json()
             if 'error' in response_data:
@@ -181,11 +155,11 @@ def get_response(message, progress_bar, start_time, message_placeholder=None):
             
             model_name = "Local " + get_current_model_name()
             st.session_state.usage_info = {
-                'prompt_tokens': response_data['prompt_tokens'],
-                'completion_tokens': response_data['completion_tokens'],
-                'total_tokens': response_data['total_tokens'],
-                'elapsed_time': round(end_time - start_time, 2)
+                'prompt_tokens': response_data.get('prompt_tokens', 0),
+                'completion_tokens': response_data.get('completion_tokens', 0),
+                'total_tokens': response_data.get('total_tokens', 0)
             }
+
             if thinking_content:
                 st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': clean_message, 'reasoning': thinking_content, 'model': model_name})
             else:
@@ -195,15 +169,18 @@ def get_response(message, progress_bar, start_time, message_placeholder=None):
             time.sleep(1)
             progress_bar.empty()
             return clean_message
+        
         elif status == 'queued':
-            # Update the progress bar
+
             queue_size_response = requests.get(queue_size_url)
             queue_size = queue_size_response.json()['queue_size']
-            progress_bar.progress(35, f"Waiting in queue... (Position: {queue_position} / Queue Size: {queue_size})")
+            progress_bar.progress(65, f"Waiting in queue... (Position: {queue_position} / Queue Size: {queue_size})")
             time.sleep(0.5)
+
         elif status == 'processing':
-            progress_bar.progress(50, "Request is being processed...")
+            progress_bar.progress(70, "Request is being processed...")
             time.sleep(0.5)
+
         else:
             st.error("Error retrieving response")
             progress_bar.empty()

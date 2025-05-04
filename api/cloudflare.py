@@ -7,7 +7,7 @@ import time
 # Load environment variables
 load_dotenv()
 
-# Set up the API URL for Cloudflare Workers AI
+# Set up API Credentials
 AUTH_TOKEN = getenv("CLOUDFLARE_WORKERS_AI_TOKEN")
 ACCOUNT_ID = getenv("CLOUDFLARE_ACCOUNT_ID")
 GATEWAY_ID = getenv("CLOUDLFARE_AI_GATEWAY_GATEWAY_ID")
@@ -67,10 +67,10 @@ models = {
 def get_response(message, progress_bar):
     """Get response from Cloudflare Workers AI API"""
     url = base_url + models[st.session_state.cloudflare_model]
-    progress_bar.progress(20, "Sending request to Cloudflare Workers AI...")
-    
     messages = [{"role": msg['role'], "content": msg['content']} for msg in message]
     
+    progress_bar.progress(50, "Sending request to Cloudflare Workers AI...")
+
     response = requests.post(
         url,
         headers={"Authorization": f"Bearer {AUTH_TOKEN}"},
@@ -85,13 +85,12 @@ def get_response(message, progress_bar):
     
     if response.status_code == 200:
         response_data = response.json()
-        assistant_message = response_data['result']['response']
+        assistant_message = response_data.get('result', {}).get('response', '')
         model_name = f"Cloudflare {st.session_state.cloudflare_model}"
         st.session_state.usage_info = {
-            'prompt_tokens': response_data['result']['usage']['prompt_tokens'],
-            'completion_tokens': response_data['result']['usage']['completion_tokens'],
-            'total_tokens': response_data['result']['usage']['total_tokens'],
-            'elapsed_time': ''
+            'prompt_tokens': response_data.get('result', {}).get('usage', {}).get('prompt_tokens', 0),
+            'completion_tokens': response_data.get('result', {}).get('usage', {}).get('completion_tokens', 0),
+            'total_tokens': response_data.get('result', {}).get('usage', {}).get('total_tokens', 0)
         }
         
         st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': model_name})

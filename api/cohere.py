@@ -4,19 +4,19 @@ from os import getenv
 from dotenv import load_dotenv
 import time
 
-
 # Load environment variables
 load_dotenv()
 
+# Set up API credentials
 ACCOUNT_ID = getenv("CLOUDFLARE_ACCOUNT_ID")
 GATEWAY_ID = getenv("CLOUDLFARE_AI_GATEWAY_GATEWAY_ID")
 base_url=f"https://gateway.ai.cloudflare.com/v1/{ACCOUNT_ID}/{GATEWAY_ID}/cohere"
 
+# Set up Cohere API client
 co = cohere.ClientV2(
     api_key=getenv("COHERE_API_KEY"),
     base_url=base_url
 )
-
 
 # Available Cohere models
 models = {
@@ -33,9 +33,9 @@ models = {
 def get_response(message, progress_bar):
     """Get response from Cohere API"""
     messages = [{"role": msg['role'], "content": msg['content']} for msg in message]
-    progress_bar.progress(20, "Sending request to Cohere...")
-
     
+    progress_bar.progress(50, "Sending request to Cohere...")
+
     response = co.chat(
         model=models[st.session_state.cohere_model],
         messages=messages,
@@ -50,8 +50,7 @@ def get_response(message, progress_bar):
     st.session_state.usage_info = {
             'prompt_tokens': response.usage.tokens.input_tokens,
             'completion_tokens': response.usage.tokens.output_tokens,
-            'total_tokens': response.usage.tokens.input_tokens + response.usage.tokens.output_tokens,
-            'elapsed_time': ''
+            'total_tokens': response.usage.tokens.input_tokens + response.usage.tokens.output_tokens
         }
     
     st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': model_name})
