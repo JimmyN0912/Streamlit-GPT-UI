@@ -7,7 +7,7 @@ import time
 # Load environment variables
 load_dotenv()
 
-# Set up the API URL for openrouter
+# Set up API Credentials
 OPENROUTER_API_KEY = getenv("OPENROUTER_API_KEY")
 ACCOUNT_ID = getenv("CLOUDFLARE_ACCOUNT_ID")
 GATEWAY_ID = getenv("CLOUDLFARE_AI_GATEWAY_GATEWAY_ID")
@@ -70,15 +70,17 @@ models = {
 
 def get_response(message, progress_bar):
     """Get response from Openrouter API"""
-    progress_bar.progress(20, "Sending request to Openrouter API...")
-    
+    model = models[st.session_state.openrouter_model]
+
     messages = [{"role": msg['role'], "content": msg['content']} for msg in message]
     
+    progress_bar.progress(50, "Sending request to Openrouter API...")
+    
     response = requests.post(
-        url,
+        url=url,
         headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}"},
         json={
-            "model": models[st.session_state.openrouter_model],
+            "model": model,
             "messages": messages,
             "max_tokens": st.session_state.max_tokens,
             "temperature": st.session_state.temperature,
@@ -89,24 +91,23 @@ def get_response(message, progress_bar):
     
     if response.status_code == 200:
         response_data = response.json()
-        assistant_message = response_data['choices'][0]['message']['content']
-        model_name = f"OpenRouter {st.session_state.openrouter_model}"
+
+        assistant_message = response_data.get('choices', [{}])[0].get('message', {}).get('content', '')
         st.session_state.usage_info = {
-            'prompt_tokens': response_data['usage']['prompt_tokens'],
-            'completion_tokens': response_data['usage']['completion_tokens'],
-            'total_tokens': response_data['usage']['total_tokens'],
-            'elapsed_time': ''
+            'prompt_tokens': response_data.get('usage', {}).get('prompt_tokens', 0),
+            'completion_tokens': response_data.get('usage', {}).get('completion_tokens', 0),
+            'total_tokens': response_data.get('usage', {}).get('total_tokens', 0)
         }
         
-        # Add the response to the appropriate message list
         if response_data['choices'][0]['message']['reasoning']:
-            st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'reasoning': response_data['choices'][0]['message']['reasoning'], 'model': model_name})
+            st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'reasoning': response_data['choices'][0]['message']['reasoning'], 'model': "OpenRouter " + st.session_state.openrouter_model})
         else:
-            st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': model_name})
+            st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': "OpenRouter " + st.session_state.openrouter_model})
             
         progress_bar.progress(100, "Response processed successfully.")
         time.sleep(1)
         progress_bar.empty()
+
         return assistant_message
     else:
         st.error(f"Error from Openrouter API: {response.status_code} - {response.text}")
