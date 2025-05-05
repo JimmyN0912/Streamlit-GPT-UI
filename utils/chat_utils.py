@@ -14,44 +14,37 @@ def get_text_to_text(progress_bar=None, message_placeholder=None):
     """Get response from the selected model API"""
 
     message = st.session_state.messages
-    
-    # Initialize the progress bar
-    if progress_bar:
-        progress = progress_bar.progress(0, "Preparing request...")
-        start_time = time.time()
-    else:
-        progress = None
-        start_time = time.time()
+
     if message_placeholder:
         if st.session_state.model_provider == "Local Model":
-            return local_model.get_response(message, progress, start_time, message_placeholder)
+            return local_model.get_response(message, progress_bar, message_placeholder)
         elif st.session_state.model_provider == "Google Gemini":
-            return gemini.get_response(message, progress)
+            return gemini.get_response(message, progress_bar)
         elif st.session_state.model_provider == "Cloudflare Workers AI":
-            return cloudflare.get_response(message, progress)
+            return cloudflare.get_response(message, progress_bar)
         elif st.session_state.model_provider == "Cohere":
-            return cohere.get_response(message, progress)
+            return cohere.get_response(message, progress_bar)
         elif st.session_state.model_provider == "OpenRouter":
-            return openrouter.get_response(message, progress)
+            return openrouter.get_response(message, progress_bar)
         elif st.session_state.model_provider == "Groq":
-            return groq.get_response(message, progress)
+            return groq.get_response(message, progress_bar)
         else:
             st.error(f"Unknown model provider: {st.session_state.model_provider}")
             return None
     else:
         # Choose model provider based on session state
         if st.session_state.model_provider == "Local Model":
-            return local_model.get_response(message, progress, start_time)
+            return local_model.get_response(message, progress_bar)
         elif st.session_state.model_provider == "Google Gemini":
-            return gemini.get_response(message, progress)
+            return gemini.get_response(message, progress_bar)
         elif st.session_state.model_provider == "Cloudflare Workers AI":
-            return cloudflare.get_response(message, progress)
+            return cloudflare.get_response(message, progress_bar)
         elif st.session_state.model_provider == "Cohere":
-            return cohere.get_response(message, progress)
+            return cohere.get_response(message, progress_bar)
         elif st.session_state.model_provider == "OpenRouter":
-            return openrouter.get_response(message, progress)
+            return openrouter.get_response(message, progress_bar)
         elif st.session_state.model_provider == "Groq":
-            return groq.get_response(message, progress)
+            return groq.get_response(message, progress_bar)
         else:
             st.error(f"Unknown model provider: {st.session_state.model_provider}")
             return None

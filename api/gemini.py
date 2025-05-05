@@ -78,41 +78,40 @@ def get_response_stream(message, progress_bar):
         return None
 
 def get_response(message, progress_bar):
-    """Get response from Google Gemini API using OpenAI compatibility layer (non-streaming)"""
+    """Get response from Google Gemini API (non-streaming)"""
     try:
-        model_name = models[st.session_state.gemini_model]
+        model = models[st.session_state.gemini_model]
+
         messages = [{"role": msg['role'], "content": msg['content']} for msg in message]
         
         progress_bar.progress(50, "Sending request to Gemini API...")
         
         response = client.chat.completions.create(
-            model=model_name,
+            model=model,
             messages=messages,
             temperature=st.session_state.temperature,
             max_tokens=st.session_state.max_tokens,
             stream=False
         )
 
-        assistant_message = response.choices[0].message.content
-        
         progress_bar.progress(90, "Response received, processing...")
-        model_display_name = f"Google {model_name}"
-        
+
+        assistant_message = response.choices[0].message.content       
         st.session_state.usage_info = {
             'prompt_tokens': response.usage.prompt_tokens,
             'completion_tokens': response.usage.completion_tokens,
             'total_tokens': response.usage.total_tokens
         }
 
-        st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': model_display_name})
+        st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': "Gemini " + st.session_state.gemini_model})
 
         progress_bar.progress(100, "Response processed successfully.")
         time.sleep(1)
-        progress_bar.empty()        
+        progress_bar.empty()
+
         return assistant_message
 
     except Exception as e:
         st.error(f"Error with Gemini API: {str(e)}")
-        print(f"Error with Gemini API: {str(e)}")
         progress_bar.empty()
         return None

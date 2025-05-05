@@ -70,15 +70,17 @@ models = {
 
 def get_response(message, progress_bar):
     """Get response from Openrouter API"""
+    model = models[st.session_state.openrouter_model]
+
     messages = [{"role": msg['role'], "content": msg['content']} for msg in message]
     
     progress_bar.progress(50, "Sending request to Openrouter API...")
     
     response = requests.post(
-        url,
+        url=url,
         headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}"},
         json={
-            "model": models[st.session_state.openrouter_model],
+            "model": model,
             "messages": messages,
             "max_tokens": st.session_state.max_tokens,
             "temperature": st.session_state.temperature,
@@ -89,8 +91,8 @@ def get_response(message, progress_bar):
     
     if response.status_code == 200:
         response_data = response.json()
+
         assistant_message = response_data.get('choices', [{}])[0].get('message', {}).get('content', '')
-        model_name = f"OpenRouter {st.session_state.openrouter_model}"
         st.session_state.usage_info = {
             'prompt_tokens': response_data.get('usage', {}).get('prompt_tokens', 0),
             'completion_tokens': response_data.get('usage', {}).get('completion_tokens', 0),
@@ -98,13 +100,14 @@ def get_response(message, progress_bar):
         }
         
         if response_data['choices'][0]['message']['reasoning']:
-            st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'reasoning': response_data['choices'][0]['message']['reasoning'], 'model': model_name})
+            st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'reasoning': response_data['choices'][0]['message']['reasoning'], 'model': "OpenRouter " + st.session_state.openrouter_model})
         else:
-            st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': model_name})
+            st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': "OpenRouter " + st.session_state.openrouter_model})
             
         progress_bar.progress(100, "Response processed successfully.")
         time.sleep(1)
         progress_bar.empty()
+
         return assistant_message
     else:
         st.error(f"Error from Openrouter API: {response.status_code} - {response.text}")

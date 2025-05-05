@@ -18,7 +18,7 @@ if "pdf_uploader_key" not in st.session_state:
 if "usage_info" not in st.session_state:
     st.session_state.usage_info = {}
 if "max_tokens" not in st.session_state:
-    st.session_state.max_tokens = 512
+    st.session_state.max_tokens = 8192
 if "temperature" not in st.session_state:
     st.session_state.temperature = 0.5
 if "enable_streaming" not in st.session_state:
@@ -100,9 +100,9 @@ input_container = st.empty()
 prompt = input_container.chat_input("Enter your message here...",key=32768)
 if prompt:
     st.chat_message("user").markdown(prompt)
-    progress_bar = st.empty()
+    progress_bar = st.progress(0, "Generating response...")
     message_placeholder = st.empty()
-    current_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    current_date = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
     
     # If user has set a system prompt, include it at the beginning of the current conversation
     if st.session_state.system_prompt:
@@ -202,7 +202,7 @@ with sidebar:
         help="The maximum number of tokens to generate in the response.", 
         min_value=1024, 
         max_value=16384, 
-        value=8192, 
+        value=st.session_state.max_tokens,
         step=256)
     col1, col2, col3, col4, col5 = st.columns([1, 1, 1, 1, 1])
     with col1:

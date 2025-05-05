@@ -66,7 +66,10 @@ models = {
 
 def get_response(message, progress_bar):
     """Get response from Cloudflare Workers AI API"""
-    url = base_url + models[st.session_state.cloudflare_model]
+    model = models[st.session_state.cloudflare_model]
+
+    url = base_url + model
+
     messages = [{"role": msg['role'], "content": msg['content']} for msg in message]
     
     progress_bar.progress(50, "Sending request to Cloudflare Workers AI...")
@@ -85,20 +88,22 @@ def get_response(message, progress_bar):
     
     if response.status_code == 200:
         response_data = response.json()
+
         assistant_message = response_data.get('result', {}).get('response', '')
-        model_name = f"Cloudflare {st.session_state.cloudflare_model}"
         st.session_state.usage_info = {
             'prompt_tokens': response_data.get('result', {}).get('usage', {}).get('prompt_tokens', 0),
             'completion_tokens': response_data.get('result', {}).get('usage', {}).get('completion_tokens', 0),
             'total_tokens': response_data.get('result', {}).get('usage', {}).get('total_tokens', 0)
         }
         
-        st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': model_name})
+        st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': "Cloudflare " + st.session_state.cloudflare_model})
         
         progress_bar.progress(100, "Response processed successfully.")
         time.sleep(1)
         progress_bar.empty()
+        
         return assistant_message
+    
     else:
         st.error(f"Error from Cloudflare API: {response.status_code} - {response.text}")
         progress_bar.empty()

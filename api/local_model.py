@@ -2,7 +2,6 @@ import requests
 import streamlit as st
 import time
 import uuid
-import os
 import re
 import json
 from utils.check_model import get_current_model_name
@@ -33,7 +32,7 @@ def extract_thinking(text):
     # If no thinking tags found, return original text and None
     return text, None
 
-def get_streaming_response(message, progress_bar, start_time, message_placeholder):
+def get_streaming_response(message, progress_bar, message_placeholder):
     """Get streamed response from local model via relay server"""
     request_id = str(uuid.uuid4())
     
@@ -111,28 +110,34 @@ def get_streaming_response(message, progress_bar, start_time, message_placeholde
         progress_bar.empty()
         return None
 
-def get_response(message, progress_bar, start_time, message_placeholder=None):
+def get_response(message, progress_bar, message_placeholder=None):
     """Get response from local model via relay server"""
-    # If streaming is enabled in session state, use streaming response
+
+    # If streaming is enabled, use streaming response
     if "enable_streaming" in st.session_state and st.session_state.enable_streaming:
-        return get_streaming_response(message, progress_bar, start_time, message_placeholder)
+        return get_streaming_response(message, progress_bar, message_placeholder)
     
     request_id = str(uuid.uuid4())
-    
-    data = {
-        'text': [{'role': msg['role'], 'content': msg['content']} for msg in message],
-        'request_id': request_id,
-        'max_tokens': st.session_state.max_tokens,
-        'temperature': st.session_state.temperature
-    }
+
+    model = get_current_model_name()
+
+    messages = [{"role": msg['role'], "content": msg['content']} for msg in message]
     
     progress_bar.progress(50, "Sending request...")
     
-    response = requests.post(relay_url, json=data)
-    response_data = response.json()
-    queue_position = response_data['position']
+    response = requests.post(
+        url=relay_url,
+        json={
+        'text': messages,
+        'request_id': request_id,
+        'max_tokens': st.session_state.max_tokens,
+        'temperature': st.session_state.temperature
+        }
+    )
 
-    progress_bar.progress(60, f"Request sent, waiting in queue... (Position: {queue_position})")
+    position = response.json().get('position', None)
+
+    progress_bar.progress(60, f"Request sent, waiting in queue... (Position: {position})")
 
     
     # Poll the relay server for the response
@@ -141,19 +146,20 @@ def get_response(message, progress_bar, start_time, message_placeholder=None):
 
         if status == 'completed':
             progress_bar.progress(90, "Response received, processing...")
+
             response = requests.get(f"{response_url}/{request_id}")
             response_data = response.json()
+            
             if 'error' in response_data:
                 st.error(f"Error: {response_data['error']}")
                 progress_bar.empty()
                 return None
             
-            assistant_message = response_data['assistant_message']
+            assistant_message = response_data.get('assistant_message', '')
             
             # Extract thinking content if present
             clean_message, thinking_content = extract_thinking(assistant_message)
             
-            model_name = "Local " + get_current_model_name()
             st.session_state.usage_info = {
                 'prompt_tokens': response_data.get('prompt_tokens', 0),
                 'completion_tokens': response_data.get('completion_tokens', 0),
@@ -161,9 +167,9 @@ def get_response(message, progress_bar, start_time, message_placeholder=None):
             }
 
             if thinking_content:
-                st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': clean_message, 'reasoning': thinking_content, 'model': model_name})
+                st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': clean_message, 'reasoning': thinking_content, 'model': "Local " + st.session_state.local_model})
             else:
-                st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': clean_message, 'model': model_name})
+                st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': clean_message, 'model': "Local " + st.session_state.local_model})
             
             progress_bar.progress(100, "Response processed successfully.")
             time.sleep(1)
@@ -174,7 +180,7 @@ def get_response(message, progress_bar, start_time, message_placeholder=None):
 
             queue_size_response = requests.get(queue_size_url)
             queue_size = queue_size_response.json()['queue_size']
-            progress_bar.progress(65, f"Waiting in queue... (Position: {queue_position} / Queue Size: {queue_size})")
+            progress_bar.progress(65, f"Waiting in queue... (Position: {position} / Queue Size: {queue_size})")
             time.sleep(0.5)
 
         elif status == 'processing':
