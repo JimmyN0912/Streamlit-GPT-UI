@@ -3,6 +3,7 @@ import requests
 from os import getenv
 from dotenv import load_dotenv
 import time
+import json
 
 # Load environment variables
 load_dotenv()
@@ -64,8 +65,12 @@ models = {
     "Llama 3.1 70B Instruct": "@cf/meta/llama-3.1-70b-instruct"   
 }
 
-def get_response(message, progress_bar):
+def get_response(message, progress_bar, message_placeholder=None):
     """Get response from Cloudflare Workers AI API"""
+
+    if "enable_streaming" in st.session_state and st.session_state.enable_streaming:
+        return get_streaming_response(message, progress_bar, message_placeholder)
+
     model = models[st.session_state.cloudflare_model]
 
     url = base_url + model
@@ -106,5 +111,80 @@ def get_response(message, progress_bar):
     
     else:
         st.error(f"Error from Cloudflare API: {response.status_code} - {response.text}")
+        progress_bar.empty()
+        return None
+    
+def get_streaming_response(message, progress_bar, message_placeholder):
+    """Get streaming response from Cloudflare Workers AI API"""
+    model = models[st.session_state.cloudflare_model]
+
+    url = base_url + model
+
+    messages = [{"role": msg['role'], "content": msg['content']} for msg in message]
+    
+    progress_bar.progress(50, "Sending request to Cloudflare Workers AI...")
+
+    try:
+        response = requests.post(
+            url,
+            headers={"Authorization": f"Bearer {AUTH_TOKEN}"},
+            json={
+                "messages": messages,
+                "max_tokens": st.session_state.max_tokens,
+                "temperature": st.session_state.temperature,
+                "stream": True
+            },
+            stream=True
+        )
+        
+        progress_bar.progress(90, "Streaming response...")
+        
+        if response.status_code == 200:
+            assistant_message = ""
+            for chunk in response.iter_lines():
+                if chunk:
+                    chunk_data = chunk.decode('utf-8')
+                    if chunk_data.startswith("data:"):
+                        try:
+                            # Parse the JSON data after "data:" prefix
+                            json_str = chunk_data[5:].strip()
+                            if json_str == "[DONE]":
+                                break
+                            
+                            chunk_json = json.loads(json_str)
+                            if "response" in chunk_json:
+                                chunk_text = chunk_json["response"]
+                                assistant_message += chunk_text
+                                message_placeholder.markdown(assistant_message + "▌")
+                            
+                            # Update usage info if present
+                            if "usage" in chunk_json:
+                                st.session_state.usage_info = chunk_json["usage"]
+                                
+                        except json.JSONDecodeError:
+                            continue
+            
+            message_placeholder.markdown(assistant_message)
+            
+            st.session_state.messages.append({
+                'role': 'assistant', 
+                'type': 'message', 
+                'content': assistant_message, 
+                'model': "Cloudflare " + st.session_state.cloudflare_model
+            })
+            
+            progress_bar.progress(100, "Response processed successfully.")
+            time.sleep(1)
+            progress_bar.empty()
+            
+            return assistant_message
+        
+        else:
+            st.error(f"Error from Cloudflare API: {response.status_code} - {response.text}")
+            progress_bar.empty()
+            return None
+        
+    except Exception as e:
+        st.error(f"Error with streaming: {str(e)}")
         progress_bar.empty()
         return None
