@@ -1,11 +1,12 @@
 import requests
+import streamlit as st
 
 url = "http://192.168.0.175:8080/v1/models"
 headers = {"Content-Type": "application/json"}
 
 def get_current_model_name():
     try:
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=3)
         if response.status_code == 200:
             response_json = response.json()
             model_path = response_json["data"][0]["id"]
@@ -16,4 +17,5 @@ def get_current_model_name():
             return None
     except (requests.exceptions.ConnectionError, requests.exceptions.Timeout, requests.exceptions.RequestException) as e:
         print(f"Error connecting to the server: {e}")
+        st.toast("Couldn't connect to local LLM server.")
         return None
