@@ -19,7 +19,7 @@ def get_text_to_text(progress_bar=None, message_placeholder=None):
         if st.session_state.model_provider == "Local Model":
             return local_model.get_response(message, progress_bar, message_placeholder)
         elif st.session_state.model_provider == "Google Gemini":
-            return gemini.get_response(message, progress_bar)
+            return gemini.get_response(message, progress_bar, message_placeholder)
         elif st.session_state.model_provider == "Cloudflare Workers AI":
             return cloudflare.get_response(message, progress_bar, message_placeholder)
         elif st.session_state.model_provider == "Cohere":
