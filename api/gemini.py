@@ -79,14 +79,14 @@ def get_streaming_response(message, progress_bar, message_placeholder):
     )
     assistant_message = ""
 
+    progress_bar.progress(90, "Streaming response...")
+
     for chunk in response:
         if chunk.choices and chunk.choices[0].delta.content:
             content = chunk.choices[0].delta.content
             assistant_message += content
             message_placeholder.markdown(assistant_message + "▌")
     
-    
-    progress_bar.progress(90, "Response received, processing...")
     model_display_name = f"Google {model_name}"
     
     # Set usage info

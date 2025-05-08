@@ -92,7 +92,7 @@ def get_streaming_response(message, progress_bar, message_placeholder):
     assistant_message = ""
     for chunk in response:
         if chunk.type == "message-start":
-            progress_bar.progress(90, "Response received, processing...")
+            progress_bar.progress(90, "Streaming response...")
         if chunk.type == "content-delta":
             assistant_message += chunk.delta.message.content.text
             message_placeholder.markdown(assistant_message + "▌")

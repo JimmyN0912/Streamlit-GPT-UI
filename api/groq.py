@@ -96,7 +96,7 @@ def get_response_streaming(message, progress_bar, message_placeholder):
         stream=True
     )
     
-    progress_bar.progress(90, "Response received, processing...")
+    progress_bar.progress(90, "Streaming response...")
 
     if response.status_code == 200:
         assistant_message = ""
