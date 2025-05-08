@@ -144,7 +144,8 @@ with sidebar:
     st.session_state.model_provider = st.selectbox(
         label="Model Provider",
         help="Select the AI model provider to use for generating responses.",
-        options=["Local Model", "Google Gemini", "Cloudflare Workers AI", "Cohere", "OpenRouter", "Groq"]
+        options=["Local Model", "Google Gemini", "Cloudflare Workers AI", "Cohere", "OpenRouter", "Groq"],
+        index=["Local Model", "Google Gemini", "Cloudflare Workers AI", "Cohere", "OpenRouter", "Groq"].index(st.session_state.model_provider)
     )
     
     # Add streaming toggle (only for Local Model)
