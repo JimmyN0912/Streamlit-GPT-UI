@@ -3,6 +3,7 @@ import requests
 from os import getenv
 from dotenv import load_dotenv
 import time
+import json
 
 # Load environment variables
 load_dotenv()
@@ -27,8 +28,12 @@ models = {
     "Qwen QWQ 32B": "qwen-qwq-32b"
 }
 
-def get_response(message, progress_bar):
+def get_response(message, progress_bar, message_placeholder=None):
     """Get response from Cloudflare Workers AI API"""
+
+    if "enable_streaming" in st.session_state and st.session_state.enable_streaming:
+        return get_response_streaming(message, progress_bar, message_placeholder)
+
     model = models[st.session_state.groq_model]
 
     messages = [{"role": msg['role'], "content": msg['content']} for msg in message]
@@ -56,6 +61,66 @@ def get_response(message, progress_bar):
             'prompt_tokens': response_data['usage']['prompt_tokens'],
             'completion_tokens': response_data['usage']['completion_tokens'],
             'total_tokens': response_data['usage']['total_tokens']
+        }
+        
+        st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': "Groq " + st.session_state.groq_model})
+        
+        progress_bar.progress(100, "Response processed successfully.")
+        time.sleep(1)
+        progress_bar.empty()
+
+        return assistant_message
+    else:
+        st.error(f"Error from Groq API: {response.status_code} - {response.text}")
+        progress_bar.empty()
+        return None
+    
+def get_response_streaming(message, progress_bar, message_placeholder):
+    """Get streaming response from Groq API"""
+    model = models[st.session_state.groq_model]
+
+    messages = [{"role": msg['role'], "content": msg['content']} for msg in message]
+
+    progress_bar.progress(50, "Sending request to Groq API...")
+
+    response = requests.post(
+        url=base_url,
+        headers={"Authorization": f"Bearer {API_KEY}"},
+        json={
+            "messages": messages,
+            "max_tokens": st.session_state.max_tokens,
+            "temperature": st.session_state.temperature,
+            "model": model,
+            "stream": True
+        },
+        stream=True
+    )
+    
+    progress_bar.progress(90, "Response received, processing...")
+
+    if response.status_code == 200:
+        assistant_message = ""
+        for chunk in response.iter_lines():
+            if chunk:
+                chunk_data = chunk.decode('utf-8')
+                if 'data: ' in chunk_data:
+                    data = chunk_data.split('data: ')[1]
+                    if data == '[DONE]':
+                        break
+                    else:
+                        try:
+                            json_data = json.loads(data)
+                            content = json_data.get('choices', [{}])[0].get('delta', {}).get('content', '')
+                            if content:
+                                assistant_message += content
+                                message_placeholder.markdown(assistant_message + "▌")
+                        except json.JSONDecodeError:
+                            pass
+
+        st.session_state.usage_info = {
+            'prompt_tokens': "",
+            'completion_tokens': "",
+            'total_tokens': ""
         }
         
         st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': "Groq " + st.session_state.groq_model})
