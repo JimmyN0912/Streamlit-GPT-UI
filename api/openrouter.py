@@ -3,6 +3,7 @@ import requests
 from os import getenv
 from dotenv import load_dotenv
 import time
+import json
 
 # Load environment variables
 load_dotenv()
@@ -68,8 +69,12 @@ models = {
     "AllenAI Molmo 7B D": "allenai/molmo-7b-d:free",
 }
 
-def get_response(message, progress_bar):
+def get_response(message, progress_bar, message_placeholder=None):
     """Get response from Openrouter API"""
+
+    if "enable_streaming" in st.session_state and st.session_state.enable_streaming:
+        return get_streaming_response(message, progress_bar, message_placeholder)
+
     model = models[st.session_state.openrouter_model]
 
     messages = [{"role": msg['role'], "content": msg['content']} for msg in message]
@@ -104,6 +109,73 @@ def get_response(message, progress_bar):
         else:
             st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': "OpenRouter " + st.session_state.openrouter_model})
             
+        progress_bar.progress(100, "Response processed successfully.")
+        time.sleep(1)
+        progress_bar.empty()
+
+        return assistant_message
+    else:
+        st.error(f"Error from Openrouter API: {response.status_code} - {response.text}")
+        progress_bar.empty()
+        return None
+    
+def get_streaming_response(message, progress_bar, message_placeholder):
+    """Get streaming response from Openrouter API"""
+    model = models[st.session_state.openrouter_model]
+
+    messages = [{"role": msg['role'], "content": msg['content']} for msg in message]
+    
+    progress_bar.progress(50, "Sending request to Openrouter API...")
+    
+    response = requests.post(
+        url=url,
+        headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}"},
+        json={
+            "model": model,
+            "messages": messages,
+            "max_tokens": st.session_state.max_tokens,
+            "temperature": st.session_state.temperature,
+            "stream": True
+        },
+        stream=True
+    )
+    
+    progress_bar.progress(90, "Streaming response...")
+    
+    if response.status_code == 200:
+        assistant_message = ""
+        for chunk in response.iter_lines():
+            if chunk:
+                chunk_data = chunk.decode('utf-8')
+                if 'data: ' in chunk_data:
+                    data = chunk_data.split('data: ')[1]
+                    if data == '[DONE]':
+                        break
+                    else:
+                        try:
+                            json_data = json.loads(data)
+                            content = json_data.get('choices', [{}])[0].get('delta', {}).get('content', '')
+                            if content:
+                                assistant_message += content
+                                message_placeholder.markdown(assistant_message + "▌")
+                            last_chunk_data = json_data
+                        except json.JSONDecodeError:
+                            pass
+        if last_chunk_data and 'usage' in last_chunk_data:
+            st.session_state.usage_info = {
+                'prompt_tokens': last_chunk_data.get('usage', {}).get('prompt_tokens', 0),
+                'completion_tokens': last_chunk_data.get('usage', {}).get('completion_tokens', 0),
+                'total_tokens': last_chunk_data.get('usage', {}).get('total_tokens', 0)
+            }
+        else:
+            st.session_state.usage_info = {
+                'prompt_tokens': "N/A",
+                'completion_tokens': "N/A",
+                'total_tokens': "N/A"
+            }
+        
+        st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': "OpenRouter " + st.session_state.openrouter_model})
+        
         progress_bar.progress(100, "Response processed successfully.")
         time.sleep(1)
         progress_bar.empty()

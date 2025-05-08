@@ -148,16 +148,12 @@ with sidebar:
         index=["Local Model", "Google Gemini", "Cloudflare Workers AI", "Cohere", "OpenRouter", "Groq"].index(st.session_state.model_provider)
     )
     
-    # Add streaming toggle (only for Local Model)
-    if st.session_state.model_provider == "Local Model":
-        st.session_state.enable_streaming = st.toggle(
-            label="Enable Streaming",
-            help="Enable streaming responses that appear word by word instead of all at once.",
-            value=st.session_state.enable_streaming
-        )
-    else:
-        # Reset streaming to false when not using Local Model
-        st.session_state.enable_streaming = False
+    #Streaming toggle
+    st.session_state.enable_streaming = st.toggle(
+        label="Enable Streaming",
+        help="Enable streaming responses that appear word by word instead of all at once.",
+        value=st.session_state.enable_streaming
+    )
     
     if st.session_state.model_provider == "Google Gemini":
         st.session_state.gemini_model = st.selectbox(

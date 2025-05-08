@@ -24,94 +24,81 @@ client = OpenAI(
     base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
 )
 
-def get_response_stream(message, progress_bar):
-    """Get response from Google Gemini API"""
-    try:
-        model_name = models[st.session_state.gemini_model]
-
-        progress_bar.progress(50, "Sending request to Gemini API...")
-        
-        messages = [{"role": msg['role'], "content": msg['content']} for msg in message]
-        
-        # For streaming with OpenAI client
-        assistant_message = ""
-        response_placeholder = st.empty()
-        
-        # Make the streaming request
-        stream = client.chat.completions.create(
-            model=model_name,
-            messages=messages,
-            temperature=st.session_state.temperature,
-            max_tokens=st.session_state.max_tokens,
-            stream=True
-        )
-        
-        for chunk in stream:
-            if chunk.choices and chunk.choices[0].delta.content:
-                content = chunk.choices[0].delta.content
-                assistant_message += content
-                response_placeholder.markdown(assistant_message + "▌")
-        
-        response_placeholder.empty()
-        
-        progress_bar.progress(90, "Response received, processing...")
-        model_display_name = f"Google {model_name}"
-        
-        # Set usage info
-        st.session_state.usage_info = {
-            'prompt_tokens': "N/A (streaming)",
-            'completion_tokens': "N/A (streaming)",
-            'total_tokens': "N/A (streaming)"
-        }
-        
-        st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': model_display_name})
-
-        progress_bar.progress(1.0, "Response processed successfully.")
-        time.sleep(1)
-        progress_bar.empty()        
-        return assistant_message
-
-    except Exception as e:
-        st.error(f"Error with Gemini API: {str(e)}")
-        print(f"Error with Gemini API: {str(e)}")
-        progress_bar.empty()
-        return None
-
-def get_response(message, progress_bar):
+def get_response(message, progress_bar, message_placeholder=None):
     """Get response from Google Gemini API (non-streaming)"""
-    try:
-        model = models[st.session_state.gemini_model]
 
-        messages = [{"role": msg['role'], "content": msg['content']} for msg in message]
-        
-        progress_bar.progress(50, "Sending request to Gemini API...")
-        
-        response = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=st.session_state.temperature,
-            max_tokens=st.session_state.max_tokens,
-            stream=False
-        )
+    if "enable_streaming" in st.session_state and st.session_state.enable_streaming:
+        return get_streaming_response(message, progress_bar, message_placeholder)
+    
+    model = models[st.session_state.gemini_model]
 
-        progress_bar.progress(90, "Response received, processing...")
+    messages = [{"role": msg['role'], "content": msg['content']} for msg in message]
+    
+    progress_bar.progress(50, "Sending request to Gemini API...")
+    
+    response = client.chat.completions.create(
+        model=model,
+        messages=messages,
+        temperature=st.session_state.temperature,
+        max_tokens=st.session_state.max_tokens,
+        stream=False
+    )
 
-        assistant_message = response.choices[0].message.content       
-        st.session_state.usage_info = {
-            'prompt_tokens': response.usage.prompt_tokens,
-            'completion_tokens': response.usage.completion_tokens,
-            'total_tokens': response.usage.total_tokens
-        }
+    progress_bar.progress(90, "Response received, processing...")
 
-        st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': "Gemini " + st.session_state.gemini_model})
+    assistant_message = response.choices[0].message.content       
+    st.session_state.usage_info = {
+        'prompt_tokens': response.usage.prompt_tokens,
+        'completion_tokens': response.usage.completion_tokens,
+        'total_tokens': response.usage.total_tokens
+    }
 
-        progress_bar.progress(100, "Response processed successfully.")
-        time.sleep(1)
-        progress_bar.empty()
+    st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': "Gemini " + st.session_state.gemini_model})
 
-        return assistant_message
+    progress_bar.progress(100, "Response processed successfully.")
+    time.sleep(1)
+    progress_bar.empty()
 
-    except Exception as e:
-        st.error(f"Error with Gemini API: {str(e)}")
-        progress_bar.empty()
-        return None
+    return assistant_message
+
+def get_streaming_response(message, progress_bar, message_placeholder):
+    """Get response from Google Gemini API"""
+    model_name = models[st.session_state.gemini_model]
+
+    progress_bar.progress(50, "Sending request to Gemini API...")
+    
+    messages = [{"role": msg['role'], "content": msg['content']} for msg in message]
+
+    response = client.chat.completions.create(
+        model=model_name,
+        messages=messages,
+        temperature=st.session_state.temperature,
+        max_tokens=st.session_state.max_tokens,
+        stream=True,
+        stream_options={"include_usage": True}
+    )
+    assistant_message = ""
+
+    progress_bar.progress(90, "Streaming response...")
+
+    for chunk in response:
+        if chunk.choices and chunk.choices[0].delta.content:
+            content = chunk.choices[0].delta.content
+            assistant_message += content
+            message_placeholder.markdown(assistant_message + "▌")
+    
+    model_display_name = f"Google {model_name}"
+    
+    # Set usage info
+    st.session_state.usage_info = {
+        'prompt_tokens': "N/A (WIP)",
+        'completion_tokens': "N/A (WIP)",
+        'total_tokens': "N/A (WIP)"
+    }
+    
+    st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': model_display_name})
+
+    progress_bar.progress(100, "Response processed successfully.")
+    time.sleep(1)
+    progress_bar.empty()        
+    return assistant_message
