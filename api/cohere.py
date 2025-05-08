@@ -30,8 +30,12 @@ models = {
     "Command Light Nightly": "command-light-nightly"
 }
 
-def get_response(message, progress_bar):
+def get_response(message, progress_bar, message_placeholder=None):
     """Get response from Cohere API"""
+
+    if "enable_streaming" in st.session_state and st.session_state.enable_streaming:
+        return get_streaming_response(message, progress_bar, message_placeholder)
+
     model = models[st.session_state.cohere_model]
 
     messages = [{"role": msg['role'], "content": msg['content']} for msg in message]
@@ -58,6 +62,47 @@ def get_response(message, progress_bar):
             'total_tokens': response.usage.tokens.input_tokens + response.usage.tokens.output_tokens
         }
     
+    st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': "Cohere " + st.session_state.cohere_model})
+    
+    progress_bar.progress(100, "Response processed successfully.")
+    time.sleep(1)
+    progress_bar.empty()
+
+    return assistant_message
+
+def get_streaming_response(message, progress_bar, message_placeholder):
+    """Get streaming response from Cohere API"""
+    model = models[st.session_state.cohere_model]
+
+    messages = [{"role": msg['role'], "content": msg['content']} for msg in message]
+    
+    if st.session_state.max_tokens > 4096:
+        st.warning("Cohere models' max tokens are 4096. Setting to 4096.")
+        st.session_state.max_tokens = 4096
+
+    progress_bar.progress(50, "Sending request to Cohere...")
+
+    response = co.chat_stream(
+        model=model,
+        messages=messages,
+        max_tokens=st.session_state.max_tokens,
+        temperature=st.session_state.temperature
+    )
+    
+    assistant_message = ""
+    for chunk in response:
+        if chunk.type == "message-start":
+            progress_bar.progress(90, "Response received, processing...")
+        if chunk.type == "content-delta":
+            assistant_message += chunk.delta.message.content.text
+            message_placeholder.markdown(assistant_message + "▌")
+        if chunk.type == "message-end":
+            st.session_state.usage_info = {
+                'prompt_tokens': chunk.delta.usage.tokens.input_tokens,
+                'completion_tokens': chunk.delta.usage.tokens.output_tokens,
+                'total_tokens': chunk.delta.usage.tokens.input_tokens + chunk.delta.usage.tokens.output_tokens
+            }
+
     st.session_state.messages.append({'role': 'assistant', 'type': 'message', 'content': assistant_message, 'model': "Cohere " + st.session_state.cohere_model})
     
     progress_bar.progress(100, "Response processed successfully.")

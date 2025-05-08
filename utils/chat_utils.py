@@ -23,7 +23,7 @@ def get_text_to_text(progress_bar=None, message_placeholder=None):
         elif st.session_state.model_provider == "Cloudflare Workers AI":
             return cloudflare.get_response(message, progress_bar, message_placeholder)
         elif st.session_state.model_provider == "Cohere":
-            return cohere.get_response(message, progress_bar)
+            return cohere.get_response(message, progress_bar, message_placeholder)
         elif st.session_state.model_provider == "OpenRouter":
             return openrouter.get_response(message, progress_bar)
         elif st.session_state.model_provider == "Groq":
