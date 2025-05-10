@@ -7,41 +7,41 @@ from utils import check_model
 from api import gemini, cloudflare, cohere, openrouter, groq
 
 # Initialize session state variables
-if "messages" not in st.session_state:
-    st.session_state.messages = CHAT_DEFAULT.copy()
-if "system_prompt" not in st.session_state:
-    st.session_state.system_prompt = ""
-if "chat_uploader_key" not in st.session_state:
-    st.session_state.chat_uploader_key = 0
-if "pdf_uploader_key" not in st.session_state:
-    st.session_state.pdf_uploader_key = 131072
-if "usage_info" not in st.session_state:
-    st.session_state.usage_info = {}
-if "max_tokens" not in st.session_state:
-    st.session_state.max_tokens = 8192
-if "temperature" not in st.session_state:
-    st.session_state.temperature = 0.5
-if "enable_streaming" not in st.session_state:
-    st.session_state.enable_streaming = True
-if "edit_mode" not in st.session_state:
-    st.session_state.edit_mode = False
-if "model_provider" not in st.session_state:
-    st.session_state.model_provider = "Local Model"
-if "local_model" not in st.session_state:
-    st.session_state.local_model = None
-if "gemini_model" not in st.session_state:
-    st.session_state.gemini_model = "gemini-1.5-pro"
-if "cloudflare_model" not in st.session_state:
-    st.session_state.cloudflare_model = "Llama 4 Scout 17B 16E Instruct"
-if "cohere_model" not in st.session_state:
-    st.session_state.cohere_model = "Command R+"
-if "openrouter_model" not in st.session_state:
-    st.session_state.openrouter_model = "NVDA Llama 3.1 Nemotron Ultra 253B V1"
-if "groq_model" not in st.session_state:
-    st.session_state.groq_model = "Llama 4 Maverick 17B 128E Instruct"
+SESSION_DEFAULTS = {
+    "messages": CHAT_DEFAULT.copy(),
+    "messages_2": CHAT_DEFAULT.copy(),
+    "system_prompt": "",
+    "system_prompt_2": "",
+    "chat_uploader_key": 0,
+    "pdf_uploader_key": 131072,
+    "usage_info": {},
+    "max_tokens": 8192,
+    "temperature": 0.5,
+    "enable_streaming": True,
+    "edit_mode": False,
+    "comparison_mode": False,
+    "model_provider": "Local Model",
+    "model_provider_2": "Google Gemini",
+    "local_model": None,
+    "gemini_model": "gemini-1.5-pro",
+    "gemini_model_2": "gemini-1.5-pro",
+    "cloudflare_model": "Llama 4 Scout 17B 16E Instruct",
+    "cloudflare_model_2": "Llama 4 Scout 17B 16E Instruct",
+    "cohere_model": "Command R+",
+    "cohere_model_2": "Command R+",
+    "openrouter_model": "NVDA Llama 3.1 Nemotron Ultra 253B V1",
+    "openrouter_model_2": "NVDA Llama 3.1 Nemotron Ultra 253B V1",
+    "groq_model": "Llama 4 Maverick 17B 128E Instruct",
+    "groq_model_2": "Llama 4 Maverick 17B 128E Instruct"
+}
+
+# Initialize session state variables
+for key, default_value in SESSION_DEFAULTS.items():
+    if key not in st.session_state:
+        st.session_state[key] = default_value
 
 # Set page config
-st.set_page_config(page_title="Text Chat Bot", page_icon="🤖", layout="wide", menu_items={"Report a bug": "mailto:ljsh1111031@ljsh.hcc.edu.tw"})
+st.set_page_config(page_title="Text Chat Bot", page_icon="🤖", layout="wide", menu_items={"Report a bug": "mailto:jjy@jimmyn.idv.tw"})
 if st.session_state.model_provider == "Local Model":
     st.session_state.local_model = check_model.get_current_model_name()
     if st.session_state.local_model == None:
@@ -61,21 +61,110 @@ elif st.session_state.model_provider == "Groq":
 
 progress_bar = st.empty()
 
+# Sidebar
+sidebar = st.sidebar
+with sidebar:
+    st.session_state.comparison_mode = st.toggle(
+            label="Comparison Mode",
+            help="Enable comparison mode to generate responses from multiple models simultaneously.",
+            value=st.session_state.comparison_mode
+        )
+
 # Main Interface
-total_messages = len(st.session_state.messages)
-for index, message in enumerate(st.session_state.messages):
-    if index == total_messages - 4:
-        if st.session_state.edit_mode == True:
-            editor = st.empty()
-            new_message = editor.text_input("Edit last message", value=message["content"])
-            if new_message is not message["content"]:
-                editor.empty()
-                st.session_state.messages[-2]["content"] = new_message
-                del st.session_state.messages[-1]
-                st.session_state.edit_mode = False
-                st.chat_message("user").markdown(new_message)
-                get_text_to_text()
-                st.rerun()
+if st.session_state.comparison_mode:
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        st.subheader("Model 1")
+        total_messages = len(st.session_state.messages)
+        for index, message in enumerate(st.session_state.messages):
+            if index == total_messages - 4:
+                if st.session_state.edit_mode == True:
+                    editor = st.empty()
+                    new_message = editor.text_input("Edit last message", value=message["content"])
+                    if new_message is not message["content"]:
+                        editor.empty()
+                        st.session_state.messages[-2]["content"] = new_message
+                        del st.session_state.messages[-1]
+                        st.session_state.edit_mode = False
+                        st.chat_message("user").markdown(new_message)
+                        get_text_to_text()
+                        st.rerun()
+                else:
+                    if message["type"] == "PDF":
+                        st.chat_message("user").expander(message["file_name"], expanded=False).markdown(message["content"])
+                    elif message["role"] != "system":
+                        if message.get("reasoning"):
+                            st.chat_message("assistant").expander("Reasoning", expanded=False).markdown(message["reasoning"])
+                        st.chat_message(message["role"]).markdown(message["content"])
+                        if message["role"] == "assistant" and "model" in message:
+                            st.caption(f"Generated by: {message['model']}")
+            else:
+                if message["type"] == "PDF":
+                    st.chat_message("user").expander(message["file_name"], expanded=False).markdown(message["content"])
+                elif message["role"] != "system":
+                    if message.get("reasoning"):
+                        st.chat_message("assistant").expander("Reasoning", expanded=False).markdown(message["reasoning"])
+                    st.chat_message(message["role"]).markdown(message["content"])
+                    if message["role"] == "assistant" and "model" in message:
+                        st.caption(f"Generated by: {message['model']}")
+    with col2:
+        st.subheader("Model 2")
+        total_messages = len(st.session_state.messages_2)
+        for index, message in enumerate(st.session_state.messages_2):
+            if index == total_messages - 4:
+                if st.session_state.edit_mode == True:
+                    editor = st.empty()
+                    new_message = editor.text_input("Edit last message", value=message["content"])
+                    if new_message is not message["content"]:
+                        editor.empty()
+                        st.session_state.messages_2[-2]["content"] = new_message
+                        del st.session_state.messages_2[-1]
+                        st.session_state.edit_mode = False
+                        st.chat_message("user").markdown(new_message)
+                        get_text_to_text()
+                        st.rerun()
+                else:
+                    if message["type"] == "PDF":
+                        st.chat_message("user").expander(message["file_name"], expanded=False).markdown(message["content"])
+                    elif message["role"] != "system":
+                        if message.get("reasoning"):
+                            st.chat_message("assistant").expander("Reasoning", expanded=False).markdown(message["reasoning"])
+                        st.chat_message(message["role"]).markdown(message["content"])
+                        if message["role"] == "assistant" and "model" in message:
+                            st.caption(f"Generated by: {message['model']}")
+            else:
+                if message["type"] == "PDF":
+                    st.chat_message("user").expander(message["file_name"], expanded=False).markdown(message["content"])
+                elif message["role"] != "system":
+                    if message.get("reasoning"):
+                        st.chat_message("assistant").expander("Reasoning", expanded=False).markdown(message["reasoning"])
+                    st.chat_message(message["role"]).markdown(message["content"])
+                    if message["role"] == "assistant" and "model" in message:
+                        st.caption(f"Generated by: {message['model']}")
+else:
+    total_messages = len(st.session_state.messages)
+    for index, message in enumerate(st.session_state.messages):
+        if index == total_messages - 4:
+            if st.session_state.edit_mode == True:
+                editor = st.empty()
+                new_message = editor.text_input("Edit last message", value=message["content"])
+                if new_message is not message["content"]:
+                    editor.empty()
+                    st.session_state.messages[-2]["content"] = new_message
+                    del st.session_state.messages[-1]
+                    st.session_state.edit_mode = False
+                    st.chat_message("user").markdown(new_message)
+                    get_text_to_text()
+                    st.rerun()
+            else:
+                if message["type"] == "PDF":
+                    st.chat_message("user").expander(message["file_name"], expanded=False).markdown(message["content"])
+                elif message["role"] != "system":
+                    if message.get("reasoning"):
+                        st.chat_message("assistant").expander("Reasoning", expanded=False).markdown(message["reasoning"])
+                    st.chat_message(message["role"]).markdown(message["content"])
+                    if message["role"] == "assistant" and "model" in message:
+                        st.caption(f"Generated by: {message['model']}")
         else:
             if message["type"] == "PDF":
                 st.chat_message("user").expander(message["file_name"], expanded=False).markdown(message["content"])
@@ -85,15 +174,6 @@ for index, message in enumerate(st.session_state.messages):
                 st.chat_message(message["role"]).markdown(message["content"])
                 if message["role"] == "assistant" and "model" in message:
                     st.caption(f"Generated by: {message['model']}")
-    else:
-        if message["type"] == "PDF":
-            st.chat_message("user").expander(message["file_name"], expanded=False).markdown(message["content"])
-        elif message["role"] != "system":
-            if message.get("reasoning"):
-                st.chat_message("assistant").expander("Reasoning", expanded=False).markdown(message["reasoning"])
-            st.chat_message(message["role"]).markdown(message["content"])
-            if message["role"] == "assistant" and "model" in message:
-                st.caption(f"Generated by: {message['model']}")
 
 # Accept user input
 input_container = st.empty()
@@ -104,88 +184,218 @@ if prompt:
     message_placeholder = st.empty()
     current_date = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
     
-    # If user has set a system prompt, include it at the beginning of the current conversation
-    if st.session_state.system_prompt:
-        # Check if we need to add the system prompt (if it's not already the first message)
-        if not (len(st.session_state.messages) > 0 and 
-                st.session_state.messages[0].get('role') == 'system' and 
-                st.session_state.messages[0].get('content') == st.session_state.system_prompt):
-            # Insert system prompt at beginning of messages
-            st.session_state.messages.insert(0, {
-                'role': 'system', 
-                'type': 'message', 
-                'content': st.session_state.system_prompt
-            })
+    if st.session_state.comparison_mode:
+        # Handle system prompts for both models
+        if st.session_state.system_prompt:
+            if not (len(st.session_state.messages) > 0 and 
+                    st.session_state.messages[0].get('role') == 'system' and 
+                    st.session_state.messages[0].get('content') == st.session_state.system_prompt):
+                st.session_state.messages.append(0, {
+                    'role': 'system', 
+                    'type': 'message', 
+                    'content': st.session_state.system_prompt
+                })
+        
+        if st.session_state.system_prompt_2:
+            if not (len(st.session_state.messages_2) > 0 and 
+                    st.session_state.messages_2[0].get('role') == 'system' and 
+                    st.session_state.messages_2[0].get('content') == st.session_state.system_prompt_2):
+                st.session_state.messages_2.insert(0, {
+                    'role': 'system', 
+                    'type': 'message', 
+                    'content': st.session_state.system_prompt_2
+                })
+        
+        # Add date and user message to both conversations
+        date_message = {'role': 'system', 'type': 'message', 'content': "Current Date and Time: " + current_date}
+        user_message = {'role': 'user', 'type': 'message', 'content': prompt}
+        
+        st.session_state.messages.extend([date_message, user_message])
+        st.session_state.messages_2.extend([date_message.copy(), user_message.copy()])
+        
+        input_container.empty()
+        first_response, second_response = get_text_to_text(progress_bar, message_placeholder)
+    else:
+        # Original single model logic
+        if st.session_state.system_prompt:
+            if not (len(st.session_state.messages) > 0 and 
+                    st.session_state.messages[0].get('role') == 'system' and 
+                    st.session_state.messages[0].get('content') == st.session_state.system_prompt):
+                st.session_state.messages.insert(0, {
+                    'role': 'system', 
+                    'type': 'message', 
+                    'content': st.session_state.system_prompt
+                })
+        
+        st.session_state.messages.append({'role': 'system', 'type': 'message', 'content': "Current Date and Time: " + current_date})
+        st.session_state.messages.append({'role': 'user', 'type': 'message', 'content': prompt})
+        input_container.empty()
+        response = get_text_to_text(progress_bar, message_placeholder)
     
-    # Add date and user message
-    st.session_state.messages.append({'role': 'system', 'type': 'message', 'content': "Current Date and Time: " + current_date})
-    st.session_state.messages.append({'role': 'user', 'type': 'message', 'content': prompt})
-    input_container.empty()
-    response = get_text_to_text(progress_bar, message_placeholder)
     st.rerun()
 message_placeholder = st.empty()
 
-# Sidebar
-sidebar = st.sidebar
 with sidebar:
-    st.markdown("## Chat Settings")
-    # Add system prompt input
-    system_prompt = st.text_area(
-        label="System Prompt",
-        help="Set a system prompt that will be included at the beginning of each conversation. Leave empty for no system prompt.",
-        value=st.session_state.system_prompt,
-        placeholder="Example: You are a helpful assistant who specializes in programming...",
-        height=100
-    )
-    # Update session state if the prompt has changed
-    if system_prompt != st.session_state.system_prompt:
-        st.session_state.system_prompt = system_prompt
+    if st.session_state.comparison_mode:
+        model_1, model_2 = st.tabs(["Model 1", "Model 2"])
+        with model_1:
+            # Add system prompt input
+            system_prompt = st.text_area(
+                label="System Prompt",
+                help="Set a system prompt that will be included at the beginning of each conversation. Leave empty for no system prompt.",
+                value=st.session_state.system_prompt,
+                placeholder="Example: You are a helpful assistant who specializes in programming...",
+                height=100
+            )
+            # Update session state if the prompt has changed
+            if system_prompt != st.session_state.system_prompt:
+                st.session_state.system_prompt = system_prompt
 
-    st.session_state.model_provider = st.selectbox(
-        label="Model Provider",
-        help="Select the AI model provider to use for generating responses.",
-        options=["Local Model", "Google Gemini", "Cloudflare Workers AI", "Cohere", "OpenRouter", "Groq"],
-        index=["Local Model", "Google Gemini", "Cloudflare Workers AI", "Cohere", "OpenRouter", "Groq"].index(st.session_state.model_provider)
-    )
-    
-    #Streaming toggle
-    st.session_state.enable_streaming = st.toggle(
-        label="Enable Streaming",
-        help="Enable streaming responses that appear word by word instead of all at once.",
-        value=st.session_state.enable_streaming
-    )
-    
-    if st.session_state.model_provider == "Google Gemini":
-        st.session_state.gemini_model = st.selectbox(
-            label="Gemini Model",
-            help="Select which Gemini model to use.",
-            options=gemini.models.keys()
+            st.session_state.model_provider = st.selectbox(
+                label="Model Provider",
+                help="Select the AI model provider to use for generating responses.",
+                options=["Local Model", "Google Gemini", "Cloudflare Workers AI", "Cohere", "OpenRouter", "Groq"],
+                index=["Local Model", "Google Gemini", "Cloudflare Workers AI", "Cohere", "OpenRouter", "Groq"].index(st.session_state.model_provider)
+            )
+            if st.session_state.model_provider == "Google Gemini":
+                st.session_state.gemini_model = st.selectbox(
+                    label="Gemini Model",
+                    help="Select which Gemini model to use.",
+                    options=gemini.models.keys()
+                )
+            elif st.session_state.model_provider == "Cloudflare Workers AI":
+                st.session_state.cloudflare_model = st.selectbox(
+                    label="Cloudflare Workers AI Model",
+                    help="Select which Cloudflare Workers AI model to use.",
+                    options=cloudflare.models.keys()
+                )
+            elif st.session_state.model_provider == "Cohere":
+                st.session_state.cohere_model = st.selectbox(
+                    label="Cohere Model",
+                    help="Select which Cohere model to use.",
+                    options=cohere.models.keys()
+                )
+            elif st.session_state.model_provider == "OpenRouter":
+                st.session_state.openrouter_model = st.selectbox(
+                    label="OpenRouter Model",
+                    help="Select which OpenRouter model to use.",
+                    options=openrouter.models.keys()
+                )
+            elif st.session_state.model_provider == "Groq":
+                st.session_state.groq_model = st.selectbox(
+                    label="Groq Model",
+                    help="Select which Groq model to use.",
+                    options=groq.models.keys()
+                )
+        with model_2:
+            if st.session_state.comparison_mode:
+                # Add system prompt input for comparison model
+                system_prompt_2 = st.text_area(
+                    label="Comparison System Prompt",
+                    help="Set a system prompt for the comparison model. Leave empty for no system prompt.",
+                    value=st.session_state.system_prompt_2,
+                    placeholder="Example: You are a helpful assistant who specializes in programming...",
+                    height=100
+                )
+                providers = [opt for opt in ["Local Model", "Google Gemini", "Cloudflare Workers AI", "Cohere", "OpenRouter", "Groq"] if opt != st.session_state.model_provider]
+                st.session_state.model_provider_2 = st.selectbox(
+                    label="Comparison Model Provider",
+                    help="Select the second AI model provider to use for generating responses.",
+                    options=providers,
+                    index=providers.index(st.session_state.model_provider_2)
+                )
+                if st.session_state.model_provider_2 == "Google Gemini":
+                    st.session_state.gemini_model_2 = st.selectbox(
+                        label="Gemini Model",
+                        help="Select which Gemini model to use.",
+                        options=gemini.models.keys()
+                    )
+                elif st.session_state.model_provider_2 == "Cloudflare Workers AI":
+                    st.session_state.cloudflare_model_2 = st.selectbox(
+                        label="Cloudflare Workers AI Model",
+                        help="Select which Cloudflare Workers AI model to use.",
+                        options=cloudflare.models.keys()
+                    )
+                elif st.session_state.model_provider_2 == "Cohere":
+                    st.session_state.cohere_model_2 = st.selectbox(
+                        label="Cohere Model",
+                        help="Select which Cohere model to use.",
+                        options=cohere.models.keys()
+                    )
+                elif st.session_state.model_provider_2 == "OpenRouter":
+                    st.session_state.openrouter_model_2 = st.selectbox(
+                        label="OpenRouter Model",
+                        help="Select which OpenRouter model to use.",
+                        options=openrouter.models.keys()
+                    )
+                elif st.session_state.model_provider_2 == "Groq":
+                    st.session_state.groq_model_2 = st.selectbox(
+                        label="Groq Model",
+                        help="Select which Groq model to use.",
+                        options=groq.models.keys()
+                    )
+    else:
+        # Add system prompt input
+        system_prompt = st.text_area(
+            label="System Prompt",
+            help="Set a system prompt that will be included at the beginning of each conversation. Leave empty for no system prompt.",
+            value=st.session_state.system_prompt,
+            placeholder="Example: You are a helpful assistant who specializes in programming...",
+            height=100
         )
-    elif st.session_state.model_provider == "Cloudflare Workers AI":
-        st.session_state.cloudflare_model = st.selectbox(
-            label="Cloudflare Workers AI Model",
-            help="Select which Cloudflare Workers AI model to use.",
-            options=cloudflare.models.keys()
+        # Update session state if the prompt has changed
+        if system_prompt != st.session_state.system_prompt:
+            st.session_state.system_prompt = system_prompt
+
+        st.session_state.model_provider = st.selectbox(
+            label="Model Provider",
+            help="Select the AI model provider to use for generating responses.",
+            options=["Local Model", "Google Gemini", "Cloudflare Workers AI", "Cohere", "OpenRouter", "Groq"],
+            index=["Local Model", "Google Gemini", "Cloudflare Workers AI", "Cohere", "OpenRouter", "Groq"].index(st.session_state.model_provider)
         )
-    elif st.session_state.model_provider == "Cohere":
-        st.session_state.cohere_model = st.selectbox(
-            label="Cohere Model",
-            help="Select which Cohere model to use.",
-            options=cohere.models.keys()
-        )
-    elif st.session_state.model_provider == "OpenRouter":
-        st.session_state.openrouter_model = st.selectbox(
-            label="OpenRouter Model",
-            help="Select which OpenRouter model to use.",
-            options=openrouter.models.keys()
-        )
-    elif st.session_state.model_provider == "Groq":
-        st.session_state.groq_model = st.selectbox(
-            label="Groq Model",
-            help="Select which Groq model to use.",
-            options=groq.models.keys()
-        )
-    
+        
+        # Add streaming toggle (only for Local Model)
+        if st.session_state.model_provider == "Local Model":
+            st.session_state.enable_streaming = st.toggle(
+                label="Enable Streaming",
+                help="Enable streaming responses that appear word by word instead of all at once.",
+                value=st.session_state.enable_streaming
+            )
+        else:
+            # Reset streaming to false when not using Local Model
+            st.session_state.enable_streaming = False
+        
+        if st.session_state.model_provider == "Google Gemini":
+            st.session_state.gemini_model = st.selectbox(
+                label="Gemini Model",
+                help="Select which Gemini model to use.",
+                options=gemini.models.keys()
+            )
+        elif st.session_state.model_provider == "Cloudflare Workers AI":
+            st.session_state.cloudflare_model = st.selectbox(
+                label="Cloudflare Workers AI Model",
+                help="Select which Cloudflare Workers AI model to use.",
+                options=cloudflare.models.keys()
+            )
+        elif st.session_state.model_provider == "Cohere":
+            st.session_state.cohere_model = st.selectbox(
+                label="Cohere Model",
+                help="Select which Cohere model to use.",
+                options=cohere.models.keys()
+            )
+        elif st.session_state.model_provider == "OpenRouter":
+            st.session_state.openrouter_model = st.selectbox(
+                label="OpenRouter Model",
+                help="Select which OpenRouter model to use.",
+                options=openrouter.models.keys()
+            )
+        elif st.session_state.model_provider == "Groq":
+            st.session_state.groq_model = st.selectbox(
+                label="Groq Model",
+                help="Select which Groq model to use.",
+                options=groq.models.keys()
+            )
+
     st.sidebar.markdown("## Generation Parameters")
     st.session_state.temperature = st.slider(
         label="Temperature", 

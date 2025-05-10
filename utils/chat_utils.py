@@ -13,6 +13,34 @@ def update_key(module):
 def get_text_to_text(progress_bar=None, message_placeholder=None):
     """Get response from the selected model API"""
 
+    # Store original model provider and messages to restore after first call
+    original_provider = st.session_state.model_provider
+    original_messages = st.session_state.messages.copy()
+    
+    # Check if in comparison mode
+    if st.session_state.comparison_mode:
+        # Get first response
+        first_response = get_model_response(progress_bar, message_placeholder)
+        
+        # Switch to second model and messages
+        st.session_state.model_provider = st.session_state.model_provider_2
+        current_messages = st.session_state.messages
+        st.session_state.messages = st.session_state.messages_2
+        
+        # Get second response
+        second_response = get_model_response(progress_bar, message_placeholder)
+        
+        # Restore original settings
+        st.session_state.model_provider = original_provider
+        st.session_state.messages = current_messages
+        
+        return first_response, second_response
+    else:
+        # Single model mode
+        return get_model_response(progress_bar, message_placeholder)
+
+def get_model_response(progress_bar=None, message_placeholder=None):
+    """Get response from a single model"""
     message = st.session_state.messages
 
     if message_placeholder:
